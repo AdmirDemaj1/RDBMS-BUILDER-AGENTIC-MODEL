@@ -1,0 +1,9 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "rdbms_builder": "./graph/builder.py:graph",
+    "rdbms_builder_after_clarification": "./graph/builder.py:graph_after_clarification"
+  },
+  "env": ".env"
+}
+

@@ -1,0 +1,118 @@
+# Entity Relationship Diagram
+
+```mermaid
+erDiagram
+    COMPANIES {
+        uuid id PK
+        varchar name
+        varchar registration_number UK
+        text address
+        varchar contact_email
+        varchar contact_phone
+        timestamp created_at
+        timestamp updated_at
+    }
+    VEHICLES {
+        uuid id PK
+        varchar license_plate UK
+        varchar make
+        varchar model
+        integer year
+        varchar vehicle_type
+        varchar vin UK
+        varchar color
+        integer mileage
+        uuid company_id FK
+        timestamp created_at
+        timestamp updated_at
+    }
+    DRIVERS {
+        uuid id PK
+        varchar first_name
+        varchar last_name
+        varchar license_number UK
+        date license_expiry_date
+        varchar contact_phone
+        varchar email
+        uuid company_id FK
+        timestamp created_at
+        timestamp updated_at
+    }
+    MANAGERS {
+        uuid id PK
+        varchar first_name
+        varchar last_name
+        varchar email UK
+        varchar role
+        jsonb permissions
+        uuid company_id FK
+        timestamp created_at
+        timestamp updated_at
+    }
+    DRIVER-ASSIGNMENTS {
+        uuid id PK
+        uuid driver_id FK
+        uuid vehicle_id FK
+        date assigned_date
+        boolean is_active
+        timestamp created_at
+        timestamp updated_at
+    }
+    MAINTENANCE-SCHEDULES {
+        uuid id PK
+        uuid vehicle_id FK
+        varchar maintenance_type
+        date scheduled_date
+        text description
+        varchar status
+        decimal estimated_cost
+        timestamp created_at
+        timestamp updated_at
+    }
+    FUEL-LOGS {
+        uuid id PK
+        uuid vehicle_id FK
+        uuid driver_id FK
+        date fuel_date
+        decimal fuel_amount
+        decimal fuel_cost
+        integer odometer
+        varchar location
+        timestamp created_at
+        timestamp updated_at
+    }
+    VEHICLE-LOCATIONS {
+        uuid id PK
+        uuid vehicle_id FK
+        decimal latitude
+        decimal longitude
+        timestamp timestamp
+        decimal speed
+        decimal heading
+        timestamp created_at
+        timestamp updated_at
+    }
+    FLEET-REPORTS {
+        uuid id PK
+        varchar report_type
+        uuid company_id FK
+        uuid generated_by FK
+        date report_date
+        jsonb parameters
+        varchar file_path
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    COMPANIES ||--o{ VEHICLES : has
+    COMPANIES ||--o{ DRIVERS : has
+    COMPANIES ||--o{ MANAGERS : has
+    DRIVERS ||--o{ DRIVER-ASSIGNMENTS : has
+    VEHICLES ||--o{ DRIVER-ASSIGNMENTS : has
+    VEHICLES ||--o{ MAINTENANCE-SCHEDULES : has
+    VEHICLES ||--o{ FUEL-LOGS : has
+    DRIVERS ||--o{ FUEL-LOGS : has
+    VEHICLES ||--o{ VEHICLE-LOCATIONS : has
+    COMPANIES ||--o{ FLEET-REPORTS : has
+    MANAGERS ||--o{ FLEET-REPORTS : has
+```

@@ -1,0 +1,25 @@
+# Virtual environment
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Egg info
+*.egg-info/
+*.egg
+
+# Environment variables
+.env
+
+# IDE
+.idea/
+.vscode/
+
+# LangGraph API
+.langgraph_api/
+
+# OS files
+.DS_Store

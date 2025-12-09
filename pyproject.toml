@@ -1,0 +1,29 @@
+[project]
+name = "rdbms-builder"
+version = "0.1.0"
+description = "AI-powered RDBMS schema builder using LangGraph"
+readme = "readme.md"
+requires-python = ">=3.9"
+dependencies = [
+    "langgraph>=0.6.0",
+    "langchain>=0.3.0",
+    "langchain-anthropic>=0.3.0",
+    "langchain-openai>=0.3.0",
+    "langsmith>=0.4.0",
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "langgraph-cli[inmem]>=0.4.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["graph*", "utils*"]
+
