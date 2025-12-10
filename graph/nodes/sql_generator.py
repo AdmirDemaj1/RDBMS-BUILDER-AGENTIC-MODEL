@@ -1,231 +1,245 @@
 # graph/nodes/sql_generator.py
-from typing import Dict, Any, List
+from typing import List
 from graph.state import GraphState
+from utils.state_manager import StateManager
+from utils.task_manager import start_task, complete_task, fail_task
 
 
 class SQLDialectGenerator:
-    """Generates DDL for different SQL dialects."""
-    
     def __init__(self, dialect: str):
         self.dialect = dialect.lower()
     
     def get_type_mapping(self) -> dict:
-        """Map generic types to dialect-specific types."""
-        if self.dialect == "mysql":
-            return {
-                "UUID": "CHAR(36)",
-                "SERIAL": "INT AUTO_INCREMENT",
-                "TIMESTAMP": "DATETIME",
-                "TEXT": "TEXT",
-                "BOOLEAN": "TINYINT(1)",
-                "DECIMAL": "DECIMAL",
-                "VARCHAR": "VARCHAR",
-                "INTEGER": "INT",
-                "BIGINT": "BIGINT",
-                "DATE": "DATE",
-                "JSONB": "JSON",
-                "JSON": "JSON",
+        mappings = {
+            "mysql": {
+                "UUID": "CHAR(36)", "SERIAL": "BIGINT AUTO_INCREMENT",
+                "BIGSERIAL": "BIGINT AUTO_INCREMENT",
+                "TIMESTAMP": "DATETIME", "TIMESTAMPTZ": "DATETIME",
+                "BOOLEAN": "TINYINT(1)", "JSONB": "JSON", "JSON": "JSON",
+                "TEXT": "TEXT", "INTEGER": "INT", "BIGINT": "BIGINT"
+            },
+            "sqlite": {
+                "UUID": "TEXT", "SERIAL": "INTEGER", "BIGSERIAL": "INTEGER",
+                "TIMESTAMP": "TEXT", "TIMESTAMPTZ": "TEXT",
+                "BOOLEAN": "INTEGER", "DECIMAL": "REAL", "VARCHAR": "TEXT",
+                "JSONB": "TEXT", "JSON": "TEXT", "INTEGER": "INTEGER"
+            },
+            "postgresql": {
+                "UUID": "UUID", "SERIAL": "SERIAL", "BIGSERIAL": "BIGSERIAL",
+                "TIMESTAMP": "TIMESTAMP", "TIMESTAMPTZ": "TIMESTAMPTZ",
+                "BOOLEAN": "BOOLEAN", "JSONB": "JSONB", "JSON": "JSON",
+                "TEXT": "TEXT", "INTEGER": "INTEGER", "BIGINT": "BIGINT"
             }
-        elif self.dialect == "sqlite":
-            return {
-                "UUID": "TEXT",
-                "SERIAL": "INTEGER",
-                "TIMESTAMP": "TEXT",
-                "TEXT": "TEXT",
-                "BOOLEAN": "INTEGER",
-                "DECIMAL": "REAL",
-                "VARCHAR": "TEXT",
-                "INTEGER": "INTEGER",
-                "BIGINT": "INTEGER",
-                "DATE": "TEXT",
-                "JSONB": "TEXT",
-                "JSON": "TEXT",
-            }
-        else:  # postgresql (default)
-            return {
-                "UUID": "UUID",
-                "SERIAL": "SERIAL",
-                "TIMESTAMP": "TIMESTAMP",
-                "TEXT": "TEXT",
-                "BOOLEAN": "BOOLEAN",
-                "DECIMAL": "DECIMAL",
-                "VARCHAR": "VARCHAR",
-                "INTEGER": "INTEGER",
-                "BIGINT": "BIGINT",
-                "DATE": "DATE",
-                "JSONB": "JSONB",
-                "JSON": "JSON",
-            }
+        }
+        return mappings.get(self.dialect, mappings["postgresql"])
     
     def convert_type(self, data_type: str) -> str:
-        """Convert a data type to the dialect-specific version."""
         mapping = self.get_type_mapping()
-        
-        # Handle types with parameters like VARCHAR(255) or DECIMAL(10,2)
-        base_type = data_type.split("(")[0].upper()
-        params = ""
-        if "(" in data_type:
-            params = "(" + data_type.split("(")[1]
-        
-        converted = mapping.get(base_type, data_type)
-        
-        # Don't add params if the type doesn't support them
-        if self.dialect == "sqlite" and base_type in ["VARCHAR", "DECIMAL"]:
-            return converted  # SQLite uses TEXT/REAL without params
-        
-        if params and converted not in ["TEXT", "REAL", "INTEGER"]:
-            return converted + params
-        return converted
-    
-    def get_default_id(self) -> str:
-        """Get the default ID column definition."""
-        if self.dialect == "mysql":
-            return "id INT AUTO_INCREMENT PRIMARY KEY"
-        elif self.dialect == "sqlite":
-            return "id INTEGER PRIMARY KEY AUTOINCREMENT"
-        else:
-            return "id UUID PRIMARY KEY DEFAULT gen_random_uuid()"
-    
-    def get_timestamp_default(self) -> str:
-        """Get the default timestamp value."""
-        if self.dialect == "mysql":
-            return "CURRENT_TIMESTAMP"
-        elif self.dialect == "sqlite":
-            return "CURRENT_TIMESTAMP"
-        else:
-            return "CURRENT_TIMESTAMP"
+        base = data_type.split("(")[0].upper()
+        params = "(" + data_type.split("(")[1] if "(" in data_type else ""
+        converted = mapping.get(base, data_type)
+        if self.dialect == "sqlite" and base in ["VARCHAR", "DECIMAL"]:
+            return converted
+        return converted + params if params else converted
     
     def generate_column(self, col: dict) -> str:
-        """Generate a single column definition."""
-        parts = [col['name'], self.convert_type(col['data_type'])]
+        parts = [col["name"], self.convert_type(col["data_type"])]
         
-        if col.get('primary_key'):
-            if self.dialect == "sqlite" and col['data_type'].upper() in ["INTEGER", "SERIAL"]:
+        if col.get("primary_key"):
+            if self.dialect == "sqlite" and "INTEGER" in col["data_type"].upper():
                 parts.append("PRIMARY KEY AUTOINCREMENT")
-            elif self.dialect == "mysql" and col['data_type'].upper() == "SERIAL":
-                parts.append("PRIMARY KEY")
             else:
                 parts.append("PRIMARY KEY")
         
-        if not col.get('nullable', True) and not col.get('primary_key'):
+        if not col.get("nullable", True) and not col.get("primary_key"):
             parts.append("NOT NULL")
-        
-        if col.get('unique') and not col.get('primary_key'):
+        if col.get("unique") and not col.get("primary_key"):
             parts.append("UNIQUE")
-        
-        if col.get('default') is not None:
-            default_val = col['default']
-            # Handle function defaults
-            if default_val in ['CURRENT_TIMESTAMP', 'gen_random_uuid()', 'NOW()']:
-                default_val = self.get_timestamp_default() if 'TIMESTAMP' in default_val or 'NOW' in default_val else default_val
-                if self.dialect == "mysql" and default_val == "gen_random_uuid()":
-                    default_val = "(UUID())"
-                elif self.dialect == "sqlite" and default_val == "gen_random_uuid()":
-                    default_val = "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab',abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6))))"
-            parts.append(f"DEFAULT {default_val}")
+        if col.get("default"):
+            parts.append(f"DEFAULT {col['default']}")
+        if col.get("check_constraint"):
+            parts.append(f"CHECK ({col['check_constraint']})")
         
         return " ".join(parts)
     
-    def generate_foreign_key(self, table_name: str, col: dict) -> str:
-        """Generate a foreign key constraint."""
-        if not col.get('references'):
-            return None
+    def generate_fk_constraint(self, table_name: str, col: dict) -> str:
+        ref = col["references"]
+        on_delete = ref.get("on_delete", "RESTRICT")
+        on_update = ref.get("on_update", "CASCADE")
         
-        ref = col['references']
-        fk_name = f"fk_{table_name}_{col['name']}"
-        
-        if self.dialect == "sqlite":
-            # SQLite handles FK differently - inline with column or separate
-            return f"    FOREIGN KEY ({col['name']}) REFERENCES {ref['table']}({ref['column']})"
-        else:
-            return f"    CONSTRAINT {fk_name} FOREIGN KEY ({col['name']}) REFERENCES {ref['table']}({ref['column']})"
+        fk = f"    CONSTRAINT fk_{table_name}_{col['name']} "
+        fk += f"FOREIGN KEY ({col['name']}) REFERENCES {ref['table']}({ref['column']})"
+        fk += f" ON DELETE {on_delete} ON UPDATE {on_update}"
+        return fk
     
     def generate_index(self, table_name: str, idx: dict) -> str:
-        """Generate an index statement."""
-        idx_name = idx.get('name', f"idx_{table_name}_{'_'.join(idx['columns'])}")
-        columns = ", ".join(idx['columns'])
-        unique = "UNIQUE " if idx.get('unique') else ""
+        unique = "UNIQUE " if idx.get("unique") else ""
+        columns = ", ".join(idx["columns"])
+        idx_name = idx.get("name", f"idx_{table_name}_{'_'.join(idx['columns'])}")
+        
+        if self.dialect == "postgresql" and idx.get("type", "btree") != "btree":
+            return f"CREATE {unique}INDEX {idx_name} ON {table_name} USING {idx['type']} ({columns});"
         return f"CREATE {unique}INDEX {idx_name} ON {table_name} ({columns});"
     
     def generate_table(self, table: dict) -> str:
-        """Generate a complete table DDL."""
         lines = []
         
-        # Header comment
-        if table.get('description'):
+        # Table comment
+        if table.get("description"):
             lines.append(f"-- {table['description']}")
+        
+        # Security notice for PII
+        pii_cols = [c["name"] for c in table["columns"] if c.get("is_pii")]
+        if pii_cols:
+            lines.append(f"-- ⚠️  PII columns: {', '.join(pii_cols)} - Consider encryption")
         
         lines.append(f"CREATE TABLE {table['name']} (")
         
-        column_definitions = []
-        foreign_keys = []
+        col_defs = [f"    {self.generate_column(c)}" for c in table["columns"]]
         
-        for col in table['columns']:
-            col_def = "    " + self.generate_column(col)
-            column_definitions.append(col_def)
-            
-            fk = self.generate_foreign_key(table['name'], col)
-            if fk:
-                foreign_keys.append(fk)
+        # Foreign key constraints
+        for col in table["columns"]:
+            if col.get("references"):
+                col_defs.append(self.generate_fk_constraint(table["name"], col))
         
-        all_definitions = column_definitions + foreign_keys
-        lines.append(",\n".join(all_definitions))
+        lines.append(",\n".join(col_defs))
         lines.append(");")
-        
-        # Add indexes
-        for idx in table.get('indexes', []):
-            lines.append(self.generate_index(table['name'], idx))
-        
-        lines.append("")  # Empty line after table
         
         return "\n".join(lines)
     
-    def generate_header(self) -> str:
-        """Generate the DDL header."""
-        dialect_names = {
-            "postgresql": "PostgreSQL",
-            "mysql": "MySQL",
-            "sqlite": "SQLite"
-        }
-        return f"""-- Generated RDBMS Schema
--- Dialect: {dialect_names.get(self.dialect, self.dialect)}
--- Generated by RDBMS Builder
-
-"""
+    def generate_updated_at_trigger(self, table_name: str) -> str:
+        if self.dialect == "postgresql":
+            return f"""
+-- Auto-update updated_at trigger for {table_name}
+CREATE TRIGGER trg_{table_name}_updated_at
+    BEFORE UPDATE ON {table_name}
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();"""
+        elif self.dialect == "mysql":
+            return f"""
+-- Auto-update updated_at trigger for {table_name}
+CREATE TRIGGER trg_{table_name}_updated_at
+    BEFORE UPDATE ON {table_name}
+    FOR EACH ROW
+    SET NEW.updated_at = NOW();"""
+        return ""
+    
+    def generate_rls_policy(self, table_name: str) -> str:
+        if self.dialect != "postgresql":
+            return ""
+        return f"""
+-- Row Level Security for {table_name}
+ALTER TABLE {table_name} ENABLE ROW LEVEL SECURITY;
+-- Example policy (customize based on your auth):
+-- CREATE POLICY {table_name}_tenant_isolation ON {table_name}
+--     USING (tenant_id = current_setting('app.current_tenant')::uuid);"""
     
     def generate_ddl(self, tables: List[dict]) -> str:
-        """Generate complete DDL for all tables."""
-        parts = [self.generate_header()]
+        dialect_name = {"postgresql": "PostgreSQL", "mysql": "MySQL", "sqlite": "SQLite"}
         
-        # Add dialect-specific settings
+        parts = [
+            "-- ============================================================",
+            f"-- RDBMS Schema - Production Ready",
+            f"-- Dialect: {dialect_name.get(self.dialect, self.dialect)}",
+            f"-- Generated with optimization, security, and best practices",
+            "-- ============================================================",
+            ""
+        ]
+        
+        # Dialect-specific setup
         if self.dialect == "mysql":
-            parts.append("SET FOREIGN_KEY_CHECKS = 0;\n")
+            parts.append("SET FOREIGN_KEY_CHECKS = 0;")
+            parts.append("SET sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO';")
+            parts.append("")
         elif self.dialect == "sqlite":
-            parts.append("PRAGMA foreign_keys = ON;\n")
+            parts.append("PRAGMA foreign_keys = ON;")
+            parts.append("PRAGMA journal_mode = WAL;")
+            parts.append("")
+        elif self.dialect == "postgresql":
+            parts.append("-- Enable required extensions")
+            parts.append('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";')
+            parts.append('CREATE EXTENSION IF NOT EXISTS "pgcrypto";')
+            parts.append("")
+            parts.append("-- Function for auto-updating updated_at")
+            parts.append("""CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';""")
+            parts.append("")
+        
+        # Section: Tables
+        parts.append("-- ============================================================")
+        parts.append("-- TABLES")
+        parts.append("-- ============================================================")
+        parts.append("")
         
         for table in tables:
             parts.append(self.generate_table(table))
+            parts.append("")
         
+        # Section: Indexes
+        parts.append("-- ============================================================")
+        parts.append("-- INDEXES (Critical for query performance)")
+        parts.append("-- ============================================================")
+        parts.append("")
+        
+        for table in tables:
+            indexes = table.get("indexes", [])
+            if indexes:
+                parts.append(f"-- Indexes for {table['name']}")
+                for idx in indexes:
+                    parts.append(self.generate_index(table["name"], idx))
+                parts.append("")
+        
+        # Section: Triggers
+        if self.dialect in ["postgresql", "mysql"]:
+            parts.append("-- ============================================================")
+            parts.append("-- TRIGGERS (Auto-update timestamps)")
+            parts.append("-- ============================================================")
+            for table in tables:
+                has_updated_at = any(c["name"] == "updated_at" for c in table["columns"])
+                if has_updated_at:
+                    parts.append(self.generate_updated_at_trigger(table["name"]))
+            parts.append("")
+        
+        # Section: Row Level Security
+        rls_tables = [t for t in tables if t.get("row_level_security")]
+        if rls_tables and self.dialect == "postgresql":
+            parts.append("-- ============================================================")
+            parts.append("-- ROW LEVEL SECURITY (Multi-tenant isolation)")
+            parts.append("-- ============================================================")
+            for table in rls_tables:
+                parts.append(self.generate_rls_policy(table["name"]))
+            parts.append("")
+        
+        # Cleanup
         if self.dialect == "mysql":
-            parts.append("\nSET FOREIGN_KEY_CHECKS = 1;")
+            parts.append("SET FOREIGN_KEY_CHECKS = 1;")
         
         return "\n".join(parts)
 
 
-def sql_generator(state: GraphState) -> Dict[str, Any]:
-    """
-    Node that generates DDL SQL from the validated schema.
-    Supports multiple SQL dialects.
-    """
-    dialect = state.get('sql_dialect', 'postgresql')
-    print(f"\n📝 Generating SQL DDL for {dialect.upper()}...")
+def sql_generator(state: GraphState) -> GraphState:
+    start_task(state, "generate_sql")
     
-    generator = SQLDialectGenerator(dialect)
-    ddl_script = generator.generate_ddl(state['tables'])
+    working = state["working"]
+    dialect = working.get("sql_dialect", "postgresql")
+    tables = working["tables"]
     
-    print(f"✅ SQL DDL generated successfully!")
+    try:
+        generator = SQLDialectGenerator(dialect)
+        ddl = generator.generate_ddl(tables)
+        
+        state["archive"]["ddl_script"] = ddl
+        state["working"]["current_step"] = "sql_generation_complete"
+        
+        complete_task(state, "generate_sql", f"{dialect.upper()} DDL - {len(tables)} tables")
+        
+    except Exception as e:
+        fail_task(state, "generate_sql", str(e))
+        state["working"]["current_step"] = "error"
     
-    return {
-        "ddl_script": ddl_script,
-        "current_step": "sql_generation_complete"
-    }
+    return state

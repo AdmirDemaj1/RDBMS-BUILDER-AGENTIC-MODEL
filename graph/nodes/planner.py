@@ -1,55 +1,43 @@
 # graph/nodes/planner.py
-from typing import Dict, Any, List
+from typing import List
 from langchain_core.messages import SystemMessage, HumanMessage
-from graph.state import GraphState, Task, TaskStatus
+from graph.state import GraphState
 from utils.llm import get_llm
+from utils.state_manager import StateManager
 from utils.task_manager import create_task, get_default_tasks, print_task_summary
 from pydantic import BaseModel, Field
 
 
 class TaskItem(BaseModel):
-    """A single task in the plan."""
-    content: str = Field(description="Description of what this task will accomplish")
-    node_name: str = Field(description="The node that will execute this task")
+    content: str
+    node_name: str
 
 
 class ExecutionPlan(BaseModel):
-    """The complete execution plan."""
-    tasks: List[TaskItem] = Field(description="Ordered list of tasks to execute")
-    reasoning: str = Field(description="Brief explanation of the plan")
+    tasks: List[TaskItem]
+    reasoning: str
 
 
-PLANNER_PROMPT = """You are a database architect creating an execution plan for building a database schema.
+PLANNER_PROMPT = """Create an execution plan for database schema generation.
 
-Given the software requirements, create a task list. Each task must map to one of these nodes:
-- clarify: Analyze requirements and identify any ambiguities
-- extract_entities: Identify all entities/objects from the requirements
-- analyze_relationships: Determine how entities relate to each other
-- design_schema: Create table structures with columns, types, and constraints
-- validate_schema: Check for normalization, missing foreign keys, etc.
-- critic: Critically evaluate the schema design quality
-- refine_schema: Improve schema based on critic feedback
-- generate_sql: Generate the SQL DDL script
-- generate_erd: Create an ERD diagram in Mermaid format
+Nodes (in order): clarify, extract_entities, analyze_relationships, design_schema, validate_schema, critic, refine_schema, generate_sql, generate_erd
 
-IMPORTANT:
-- Include ALL nodes in the plan in the correct order
-- The critic and refine_schema nodes help improve quality
-- Make task descriptions specific to the given requirements
-- Each node should appear exactly once
-"""
+For each node, create ONE specific task that:
+- References entities/relationships from requirements
+- Anticipates domain-specific challenges
+- Provides actionable direction
+
+Include ALL nodes. Tailor to the domain (e-commerce, healthcare, etc.)."""
 
 
-def planner(state: GraphState) -> Dict[str, Any]:
-    """
-    Node that creates an execution plan with specific tasks.
-    """
+def planner(state: GraphState) -> GraphState:
     print("\n" + "=" * 60)
     print("📋 CREATING EXECUTION PLAN")
     print("=" * 60)
-    print(f"Analyzing requirements to create task plan...\n")
     
-    enable_critic = state.get('enable_critic', True)
+    working = state["working"]
+    enable_critic = working.get("enable_critic", True)
+    requirements = working["user_requirements"]
     
     llm = get_llm()
     
@@ -58,46 +46,35 @@ def planner(state: GraphState) -> Dict[str, Any]:
         
         messages = [
             SystemMessage(content=PLANNER_PROMPT),
-            HumanMessage(content=f"""Create an execution plan for these requirements:
-
-{state['user_requirements']}
-
-Create specific tasks that reference the actual entities and features mentioned.
-{"Include critic and refine_schema tasks for quality improvement." if enable_critic else "Skip critic and refine_schema tasks."}""")
+            HumanMessage(content=f"Requirements:\n{requirements[:1000]}")
         ]
         
         result = structured_llm.invoke(messages)
+        StateManager.increment_llm_calls(state)
         
-        # Validate required nodes
-        required_nodes = {"clarify", "extract_entities", "analyze_relationships", 
-                        "design_schema", "validate_schema", "generate_sql", "generate_erd"}
-        
+        required_nodes = {"clarify", "extract_entities", "analyze_relationships",
+                         "design_schema", "validate_schema", "generate_sql", "generate_erd"}
         if enable_critic:
             required_nodes.update({"critic", "refine_schema"})
         
-        plan_nodes = {task.node_name for task in result.tasks}
+        plan_nodes = {t.node_name for t in result.tasks}
         
         if required_nodes.issubset(plan_nodes):
-            tasks = [
-                create_task(task.content, task.node_name)
-                for task in result.tasks
-            ]
-            print(f"✅ Created customized plan with {len(tasks)} tasks")
-            print(f"   Reasoning: {result.reasoning}\n")
+            tasks = [create_task(t.content, t.node_name) for t in result.tasks]
+            print(f"✅ Created plan with {len(tasks)} tasks")
         else:
-            missing = required_nodes - plan_nodes
-            print(f"⚠️ Plan missing nodes: {missing}, using default plan")
-            tasks = get_default_tasks(enable_critic=enable_critic)
+            tasks = get_default_tasks(enable_critic)
+            print("⚠️ Using default plan")
             
     except Exception as e:
-        print(f"⚠️ Could not create custom plan: {e}")
-        print("   Using default task plan...")
-        tasks = get_default_tasks(enable_critic=enable_critic)
+        print(f"⚠️ Plan error: {e}, using default")
+        tasks = get_default_tasks(enable_critic)
     
-    print_task_summary(tasks)
+    for task in tasks:
+        StateManager.add_task(state, task)
     
-    return {
-        "tasks": tasks,
-        "current_task_id": None,
-        "current_step": "planning_complete"
-    }
+    state["working"]["current_step"] = "planning_complete"
+    
+    print_task_summary(state)
+    
+    return state

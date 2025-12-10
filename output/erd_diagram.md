@@ -1,188 +1,168 @@
-# Entity Relationship Diagram
+# ERD
 
 ```mermaid
 erDiagram
     COMPANIES {
-        uuid id PK
+        integer id PK
         timestamp created_at
         timestamp updated_at
         varchar name
-        text address
-        varchar phone_number
-        varchar email
         varchar registration_number UK
-        boolean is_active
-    }
-    VEHICLE-TYPES {
-        uuid id PK
-        timestamp created_at
-        timestamp updated_at
-        varchar name UK
-        text description
-        boolean is_active
-    }
-    FUEL-TYPES {
-        uuid id PK
-        timestamp created_at
-        timestamp updated_at
-        varchar name UK
-        text description
-        boolean is_active
-    }
-    MAINTENANCE-TYPES {
-        uuid id PK
-        timestamp created_at
-        timestamp updated_at
-        varchar name UK
-        text description
-        boolean is_active
-    }
-    USER-ROLES {
-        uuid id PK
-        timestamp created_at
-        timestamp updated_at
-        varchar name UK
-        text description
+        text address
+        varchar contact_email
+        varchar contact_phone
         boolean is_active
     }
     VEHICLES {
-        uuid id PK
+        integer id PK
         timestamp created_at
         timestamp updated_at
-        varchar license_plate UK
+        integer company_id FK
+        varchar vehicle_type
         varchar make
         varchar model
         integer year
-        uuid vehicle_type_id FK
+        varchar license_plate UK
         varchar vin UK
-        varchar color
-        decimal mileage
-        varchar mileage_unit
-        varchar status
-        date purchase_date
-        uuid company_id FK
+        varchar registration_number
+        integer current_mileage
         boolean is_active
-        timestamp deleted_at
     }
     DRIVERS {
-        uuid id PK
+        integer id PK
         timestamp created_at
         timestamp updated_at
+        integer company_id FK
         varchar first_name
         varchar last_name
-        varchar email UK
-        varchar phone_number
         varchar license_number UK
         date license_expiry_date
-        varchar employee_id
-        uuid company_id FK
+        varchar contact_phone
+        varchar email
         boolean is_active
-        timestamp deleted_at
     }
-    USERS {
-        uuid id PK
+    VEHICLE-ASSIGNMENTS {
+        integer id PK
         timestamp created_at
         timestamp updated_at
-        varchar first_name
-        varchar last_name
-        varchar email UK
-        varchar password
-        uuid role_id FK
-        uuid company_id FK
-        uuid driver_id FK
-        boolean is_active
-        timestamp last_login_at
-    }
-    DRIVER-VEHICLE-ASSIGNMENTS {
-        uuid id PK
-        timestamp created_at
-        timestamp updated_at
-        uuid driver_id FK
-        uuid vehicle_id FK
+        integer vehicle_id FK
+        integer driver_id FK
         date start_date
         date end_date
         boolean is_active
-        uuid assigned_by FK
     }
     MAINTENANCE-SCHEDULES {
-        uuid id PK
+        integer id PK
         timestamp created_at
         timestamp updated_at
-        uuid vehicle_id FK
+        integer vehicle_id FK
+        varchar maintenance_type
+        integer interval_mileage
+        integer last_performed_mileage
+        integer next_due_mileage
         date scheduled_date
-        uuid maintenance_type_id FK
+        varchar status
         text description
-        boolean is_completed
-        date completed_date
-        uuid assigned_mechanic FK
+        boolean is_active
+    }
+    MAINTENANCE-RECORDS {
+        integer id PK
+        timestamp created_at
+        timestamp updated_at
+        integer vehicle_id FK
+        integer maintenance_schedule_id FK
+        varchar maintenance_type
+        date performed_date
+        integer mileage_at_service
+        decimal cost
+        varchar service_provider
+        text description
+        text notes
     }
     FUEL-LOGS {
-        uuid id PK
+        integer id PK
         timestamp created_at
         timestamp updated_at
-        uuid vehicle_id FK
-        uuid driver_id FK
-        date date
+        integer vehicle_id FK
+        integer driver_id FK
+        date fuel_date
         decimal fuel_amount
-        decimal cost
-        decimal odometer
-        uuid fuel_type_id FK
-        varchar location
+        decimal fuel_cost
+        integer odometer_reading
+        integer mileage_at_fillup
+        varchar fuel_station
     }
     VEHICLE-LOCATIONS {
-        uuid id PK
-        uuid vehicle_id FK
+        integer id PK
+        timestamp created_at
+        timestamp updated_at
+        integer vehicle_id FK
         decimal latitude
         decimal longitude
-        timestamp timestamp
+        decimal altitude
         decimal speed
         decimal heading
         decimal accuracy
+        timestamp recorded_at
+    }
+    ROLES {
+        integer id PK
+        timestamp created_at
+        timestamp updated_at
+        integer company_id FK
+        varchar role_name
+        text description
+        json permissions
+        boolean is_system_role
+        boolean is_active
+    }
+    USERS {
+        integer id PK
+        timestamp created_at
+        timestamp updated_at
+        integer company_id FK
+        varchar username UK
+        varchar email UK
+        varchar first_name
+        varchar last_name
+        integer driver_id FK
+        boolean is_active
+    }
+    USER-ROLES {
+        integer id PK
+        timestamp created_at
+        timestamp updated_at
+        integer user_id FK
+        integer role_id FK
     }
     REPORTS {
-        uuid id PK
+        integer id PK
         timestamp created_at
         timestamp updated_at
-        varchar title
+        integer company_id FK
+        integer user_id FK
         varchar report_type
-        uuid generated_by FK
-        uuid company_id FK
-        varchar date_range
-        jsonb parameters
-        text file_path
-        varchar file_storage_type
-        timestamp generated_at
-    }
-    AUDIT-LOGS {
-        uuid id PK
-        timestamp created_at
-        timestamp updated_at
-        varchar entity_type
-        uuid entity_id
-        varchar action
-        jsonb old_values
-        jsonb new_values
-        uuid changed_by FK
-        timestamp changed_at
+        varchar report_name
+        json parameters
+        timestamp generated_date
+        varchar file_path
     }
 
-    VEHICLE-TYPES ||--o{ VEHICLES : has
     COMPANIES ||--o{ VEHICLES : has
     COMPANIES ||--o{ DRIVERS : has
-    USER-ROLES ||--o{ USERS : has
-    COMPANIES ||--o{ USERS : has
-    DRIVERS ||--|| USERS : has
-    DRIVERS }o--o{ DRIVER-VEHICLE-ASSIGNMENTS : has
-    VEHICLES }o--o{ DRIVER-VEHICLE-ASSIGNMENTS : has
-    USERS ||--|| DRIVER-VEHICLE-ASSIGNMENTS : has
+    VEHICLES ||--o{ VEHICLE-ASSIGNMENTS : has
+    DRIVERS ||--o{ VEHICLE-ASSIGNMENTS : has
     VEHICLES ||--o{ MAINTENANCE-SCHEDULES : has
-    MAINTENANCE-TYPES ||--o{ MAINTENANCE-SCHEDULES : has
-    USERS ||--o{ MAINTENANCE-SCHEDULES : has
+    VEHICLES ||--o{ MAINTENANCE-RECORDS : has
+    MAINTENANCE-SCHEDULES ||--o{ MAINTENANCE-RECORDS : has
     VEHICLES ||--o{ FUEL-LOGS : has
     DRIVERS ||--o{ FUEL-LOGS : has
-    FUEL-TYPES ||--o{ FUEL-LOGS : has
     VEHICLES ||--o{ VEHICLE-LOCATIONS : has
-    USERS ||--o{ REPORTS : has
+    COMPANIES ||--o{ ROLES : has
+    COMPANIES ||--o{ USERS : has
+    DRIVERS ||--o{ USERS : has
+    USERS ||--o{ USER-ROLES : has
+    ROLES ||--o{ USER-ROLES : has
     COMPANIES ||--o{ REPORTS : has
-    USERS ||--o{ AUDIT-LOGS : has
+    USERS ||--o{ REPORTS : has
 ```

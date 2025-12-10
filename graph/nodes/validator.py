@@ -1,70 +1,56 @@
 # graph/nodes/validator.py
-from typing import Dict, Any, List
 from graph.state import GraphState
-from utils.llm import get_llm
-from langchain_core.messages import SystemMessage, HumanMessage
-import json
+from utils.task_manager import start_task, complete_task
 
 
-def validator(state: GraphState) -> Dict[str, Any]:
-    """
-    Node that validates the schema for common issues.
-    """
-    print("\n✔️  Validating schema...")
+def validator(state: GraphState) -> GraphState:
+    start_task(state, "validate_schema")
+    
+    working = state["working"]
+    tables = working["tables"]
+    relationships = working["relationships"]
     
     issues = []
-    tables = state['tables']
-    table_names = [t['name'] for t in tables]
+    table_names = [t["name"] for t in tables]
     
     for table in tables:
-        # Check for primary key
-        has_pk = any(col.get('primary_key', False) for col in table['columns'])
+        # Check PK
+        has_pk = any(c.get("primary_key") for c in table["columns"])
         if not has_pk:
-            issues.append(f"Table '{table['name']}' has no primary key")
+            issues.append(f"{table['name']}: no primary key")
         
-        # Check for timestamp columns
-        col_names = [col['name'] for col in table['columns']]
-        if 'created_at' not in col_names:
-            issues.append(f"Table '{table['name']}' missing 'created_at' column")
-        if 'updated_at' not in col_names:
-            issues.append(f"Table '{table['name']}' missing 'updated_at' column")
+        # Check timestamps
+        col_names = [c["name"] for c in table["columns"]]
+        if "created_at" not in col_names:
+            issues.append(f"{table['name']}: missing created_at")
+        if "updated_at" not in col_names:
+            issues.append(f"{table['name']}: missing updated_at")
         
-        # Check foreign key references exist
-        for col in table['columns']:
-            if col.get('references'):
-                ref_table = col['references'].get('table')
-                if ref_table and ref_table not in table_names:
-                    issues.append(
-                        f"Table '{table['name']}' column '{col['name']}' "
-                        f"references non-existent table '{ref_table}'"
-                    )
+        # Check FK references
+        for col in table["columns"]:
+            ref = col.get("references")
+            if ref and ref.get("table") not in table_names:
+                issues.append(f"{table['name']}.{col['name']}: invalid FK reference")
     
-    # Check for many-to-many junction tables
-    for rel in state.get('relationships', []):
-        if rel['type'] == 'many-to-many':
-            # Look for junction table
-            expected_junction = f"{rel['from_entity'].lower()}_{rel['to_entity'].lower()}"
-            alt_junction = f"{rel['to_entity'].lower()}_{rel['from_entity'].lower()}"
-            
+    # Check M2M junction tables
+    for rel in relationships:
+        if rel["type"] == "many-to-many":
+            e1, e2 = rel["from_entity"].lower(), rel["to_entity"].lower()
             has_junction = any(
-                expected_junction in t['name'] or alt_junction in t['name']
+                e1 in t["name"] and e2 in t["name"] or
+                f"{e1}_{e2}" in t["name"] or f"{e2}_{e1}" in t["name"]
                 for t in tables
             )
             if not has_junction:
-                issues.append(
-                    f"Missing junction table for many-to-many relationship: "
-                    f"{rel['from_entity']} <-> {rel['to_entity']}"
-                )
+                issues.append(f"Missing junction: {rel['from_entity']}<->{rel['to_entity']}")
+    
+    state["working"]["validation_issues"] = issues
+    state["working"]["iteration_count"] += 1
+    state["working"]["current_step"] = "validation_complete"
     
     if issues:
-        print(f"⚠️  Found {len(issues)} issues:")
-        for issue in issues:
-            print(f"   - {issue}")
+        complete_task(state, "validate_schema", f"{len(issues)} issues found")
     else:
-        print("✅ Schema validation passed!")
+        complete_task(state, "validate_schema", f"Valid - {len(tables)} tables OK")
     
-    return {
-        "validation_issues": issues,
-        "iteration_count": state.get('iteration_count', 0) + 1,
-        "current_step": "validation_complete"
-    }
+    return state

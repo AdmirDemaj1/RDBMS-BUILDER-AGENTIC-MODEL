@@ -1,10 +1,9 @@
 # utils/__init__.py
 from .llm import get_llm
+from .state_manager import StateManager
+from .context_builder import ContextBuilder
 from .task_manager import (
     create_task,
-    get_task_by_id,
-    get_task_by_node,
-    update_task,
     start_task,
     complete_task,
     fail_task,
@@ -16,10 +15,9 @@ from .task_manager import (
 
 __all__ = [
     "get_llm",
+    "StateManager",
+    "ContextBuilder",
     "create_task",
-    "get_task_by_id",
-    "get_task_by_node",
-    "update_task",
     "start_task",
     "complete_task",
     "fail_task",
