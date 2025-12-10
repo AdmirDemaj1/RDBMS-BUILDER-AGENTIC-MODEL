@@ -1,85 +1,72 @@
 # graph/nodes/entity_extractor.py
-from typing import Dict, Any
+from typing import List
 from langchain_core.messages import SystemMessage, HumanMessage
-from graph.state import GraphState, Entity
+from graph.state import GraphState
 from utils.llm import get_llm
-import json
+from utils.state_manager import StateManager
+from utils.context_builder import ContextBuilder
+from utils.task_manager import start_task, complete_task, fail_task
+from pydantic import BaseModel, Field
 
 
-SYSTEM_PROMPT = """You are a database architect expert. Your task is to extract 
-entities from a software requirements description.
-
-For each entity, identify:
-1. name: The entity name (singular, PascalCase, e.g., "User", "OrderItem")
-2. description: What this entity represents
-3. attributes: List of attributes/properties this entity should have
-
-Return your response as a JSON array of entities.
-
-Example output:
-[
-    {
-        "name": "User",
-        "description": "A person who uses the system",
-        "attributes": ["email", "password", "firstName", "lastName", "createdAt"]
-    },
-    {
-        "name": "Order",
-        "description": "A purchase order made by a user",
-        "attributes": ["orderNumber", "totalAmount", "status", "orderDate"]
-    }
-]
-
-Important:
-- Include common attributes like id, createdAt, updatedAt (they'll be handled separately)
-- Focus on business-specific attributes
-- Be thorough - extract ALL entities mentioned or implied
-"""
+class EntitySchema(BaseModel):
+    name: str
+    description: str
+    attributes: List[str]
 
 
-def entity_extractor(state: GraphState) -> Dict[str, Any]:
-    """
-    Node that extracts entities from user requirements.
-    
-    Args:
-        state: Current graph state
-        
-    Returns:
-        Dictionary with updates to apply to state
-    """
-    print("\n🔍 Extracting entities from requirements...")
+class EntitiesResult(BaseModel):
+    entities: List[EntitySchema]
+
+
+SYSTEM_PROMPT = """Extract database entities from requirements.
+
+Include:
+- Business objects (User, Order, Product)
+- Junction entities for M:N relationships (OrderItem, Enrollment)
+- Lookup tables (Category, Status)
+
+Exclude: Simple attributes, actions/verbs, UI concepts, derived data
+
+Format:
+- name: PascalCase, singular (User, OrderItem)
+- description: 1-2 sentences on purpose
+- attributes: Business fields only (no id, timestamps)
+
+Ensure: No duplicates, junction tables identified, hierarchies captured."""
+
+
+def entity_extractor(state: GraphState) -> GraphState:
+    start_task(state, "extract_entities")
     
     llm = get_llm()
+    structured_llm = llm.with_structured_output(EntitiesResult)
+    
+    context = ContextBuilder.for_entity_extraction(state)
     
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=f"Extract entities from these requirements:\n\n{state['user_requirements']}")
+        HumanMessage(content=context)
     ]
     
-    response = llm.invoke(messages)
-    
-    # Parse the JSON response
     try:
-        # Clean up response - remove markdown code blocks if present
-        content = response.content
-        if "```json" in content:
-            content = content.split("```json")[1].split("```")[0]
-        elif "```" in content:
-            content = content.split("```")[1].split("```")[0]
-            
-        entities = json.loads(content.strip())
+        result = structured_llm.invoke(messages)
+        StateManager.increment_llm_calls(state)
         
-        print(f"✅ Extracted {len(entities)} entities: {[e['name'] for e in entities]}")
+        entities = [
+            {"name": e.name, "description": e.description, "attributes": e.attributes}
+            for e in result.entities
+        ]
         
-        return {
-            "entities": entities,
-            "current_step": "entity_extraction_complete"
-        }
+        state["working"]["entities"] = entities
+        state["working"]["current_step"] = "entity_extraction_complete"
         
-    except json.JSONDecodeError as e:
-        print(f"❌ Error parsing entities: {e}")
-        return {
-            "entities": [],
-            "error": f"Failed to parse entities: {e}",
-            "current_step": "error"
-        }
+        names = [e["name"] for e in entities]
+        complete_task(state, "extract_entities", f"Extracted {len(entities)}: {', '.join(names[:5])}")
+        
+    except Exception as e:
+        fail_task(state, "extract_entities", str(e))
+        state["working"]["entities"] = []
+        state["working"]["current_step"] = "error"
+    
+    return state

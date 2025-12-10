@@ -1,0 +1,107 @@
+RDBMS Builder - Critic Evaluation Report
+==================================================
+
+Evaluation #1
+------------------------------
+Score: 7/10
+Summary: Good schema design with solid entity modeling and relationships. The design captures most requirements well and follows many best practices. However, there are several areas needing improvement including performance optimization for GPS tracking, data type precision issues, missing constraints, and some normalization opportunities.
+Required Revision: True
+
+Feedback Items:
+  ✅ [CRITICAL] performance
+     Issue: Vehicle locations table will have massive performance issues with real-time GPS tracking every few seconds. No partitioning or indexing strategy for high-volume time-series data.
+     Recommendation: Implement table partitioning by date/time, add composite indexes on (vehicle_id, timestamp), consider using a time-series database like TimescaleDB, or implement data retention policies to archive old location data.
+
+  ✅ [WARNING] schema
+     Issue: GPS coordinates precision may be insufficient. DECIMAL(10,8) for latitude and DECIMAL(11,8) for longitude provides ~1.1mm precision which may be overkill and waste storage.
+     Recommendation: Use DECIMAL(9,6) for latitude and DECIMAL(10,6) for longitude (provides ~10cm precision) or consider using PostGIS POINT type for better spatial query support.
+
+  ✅ [WARNING] schema
+     Issue: Missing CHECK constraints for data validation on critical fields like vehicle year, fuel amounts, coordinates ranges, and status values.
+     Recommendation: Add CHECK constraints: year BETWEEN 1900 AND EXTRACT(YEAR FROM CURRENT_DATE)+1, fuel_amount > 0, cost >= 0, latitude BETWEEN -90 AND 90, longitude BETWEEN -180 AND 180, status IN ('active', 'inactive', 'maintenance').
+
+  ✅ [WARNING] performance
+     Issue: Missing indexes on frequently queried foreign keys and filter columns.
+     Recommendation: Add indexes on: vehicles(company_id), drivers(company_id), users(company_id), driver_vehicle_assignments(driver_id, vehicle_id, is_active), maintenance_schedules(vehicle_id, scheduled_date), fuel_logs(vehicle_id, date), vehicle_locations(vehicle_id, timestamp).
+
+  ✅ [WARNING] normalization
+     Issue: Vehicle types, fuel types, maintenance types, and user roles are stored as VARCHAR instead of being normalized into lookup tables.
+     Recommendation: Create lookup tables: vehicle_types, fuel_types, maintenance_types, user_roles with foreign key references. This ensures data consistency and enables easier management of valid values.
+
+  ✅ [WARNING] schema
+     Issue: Redundant created_at and updated_at columns in vehicle_locations table for high-frequency GPS data.
+     Recommendation: Remove created_at and updated_at from vehicle_locations table since timestamp serves the same purpose and reduces storage overhead for high-volume data.
+
+  ✅ [WARNING] relationships
+     Issue: Missing constraint to ensure only one active driver assignment per vehicle at any given time.
+     Recommendation: Add a unique partial index: CREATE UNIQUE INDEX idx_active_vehicle_assignment ON driver_vehicle_assignments(vehicle_id) WHERE is_active = true AND end_date IS NULL.
+
+  ✅ [SUGGESTION] schema
+     Issue: Reports table stores file_path as VARCHAR(500) which may not be sufficient for long paths and doesn't indicate if file storage is local or cloud-based.
+     Recommendation: Consider using TEXT for file_path or implement a separate file_storage_type column to distinguish between local paths, S3 URLs, etc.
+
+  ✅ [SUGGESTION] schema
+     Issue: Missing soft delete pattern for critical entities like vehicles and drivers where historical data integrity is important.
+     Recommendation: Consider adding deleted_at TIMESTAMP column to vehicles and drivers tables instead of just is_active boolean for better audit trail.
+
+  ✅ [SUGGESTION] performance
+     Issue: JSONB parameters column in reports table may benefit from GIN indexing for parameter-based queries.
+     Recommendation: Add GIN index on parameters column if you plan to query reports based on parameter values: CREATE INDEX idx_reports_parameters ON reports USING GIN (parameters).
+
+  ✅ [SUGGESTION] schema
+     Issue: Vehicle mileage as INTEGER may not be sufficient for high-mileage vehicles or different unit systems (km vs miles).
+     Recommendation: Consider using DECIMAL(10,2) for mileage and add a mileage_unit column to specify the unit of measurement.
+
+  ✅ [SUGGESTION] entities
+     Issue: Missing audit trail entity for tracking important changes to vehicles, drivers, and assignments.
+     Recommendation: Consider adding an audit_logs table to track changes to critical entities with columns: entity_type, entity_id, action, old_values, new_values, changed_by, changed_at.
+
+
+Evaluation #2
+------------------------------
+Score: 8/10
+Summary: This is a well-designed schema that addresses most previous feedback effectively. The design shows good normalization, proper relationships, and consideration for performance. However, there are still some areas that need attention, particularly around constraints, indexing strategy, and some design decisions that could be improved.
+Required Revision: False
+
+Feedback Items:
+  ⏳ [WARNING] schema
+     Issue: Missing CHECK constraints for critical data validation despite being marked as addressed
+     Recommendation: Add CHECK constraints: vehicles.year BETWEEN 1900 AND EXTRACT(YEAR FROM CURRENT_DATE)+2, fuel_logs.fuel_amount > 0, fuel_logs.cost >= 0, vehicle_locations.latitude BETWEEN -90 AND 90, vehicle_locations.longitude BETWEEN -180 AND 180, vehicle_locations.speed >= 0
+
+  ⏳ [WARNING] performance
+     Issue: Missing explicit indexing strategy despite claiming it was addressed
+     Recommendation: Add indexes: CREATE INDEX idx_vehicle_locations_vehicle_timestamp ON vehicle_locations(vehicle_id, timestamp DESC); CREATE INDEX idx_fuel_logs_vehicle_date ON fuel_logs(vehicle_id, date); CREATE INDEX idx_assignments_vehicle_active ON driver_vehicle_assignments(vehicle_id, is_active) WHERE is_active = true
+
+  ⏳ [WARNING] schema
+     Issue: No constraint to ensure only one active driver assignment per vehicle at any time
+     Recommendation: Add unique partial index: CREATE UNIQUE INDEX idx_unique_active_vehicle_assignment ON driver_vehicle_assignments(vehicle_id) WHERE is_active = true AND end_date IS NULL
+
+  ⏳ [SUGGESTION] performance
+     Issue: Vehicle_locations table lacks partitioning strategy for high-volume time-series data
+     Recommendation: Consider implementing table partitioning by date range (daily or weekly) and include retention policy: PARTITION BY RANGE (DATE(timestamp))
+
+  ⏳ [SUGGESTION] schema
+     Issue: GPS coordinate precision may be excessive for fleet management use case
+     Recommendation: Consider reducing precision to DECIMAL(8,6) for latitude and DECIMAL(9,6) for longitude (~10cm accuracy) to save storage space while maintaining sufficient precision
+
+  ⏳ [SUGGESTION] relationships
+     Issue: Driver-User relationship could be cleaner with a direct foreign key
+     Recommendation: Consider making users.driver_id NOT NULL for driver role users, or create a separate driver_users junction table to enforce the relationship more clearly
+
+  ⏳ [SUGGESTION] schema
+     Issue: Missing validation for overlapping driver assignments
+     Recommendation: Add application-level or trigger-based validation to prevent overlapping date ranges for the same driver across different vehicles
+
+  ⏳ [SUGGESTION] performance
+     Issue: Reports table JSONB parameters column lacks indexing strategy
+     Recommendation: Add GIN index on parameters column: CREATE INDEX idx_reports_parameters ON reports USING GIN (parameters) for efficient parameter-based queries
+
+  ⏳ [SUGGESTION] schema
+     Issue: Audit_logs table may become very large without retention strategy
+     Recommendation: Consider adding a retention_until column and implement automated cleanup policy for old audit records
+
+  ⏳ [SUGGESTION] naming
+     Issue: Some column names could be more descriptive
+     Recommendation: Consider renaming: 'name' to 'company_name' in companies table, 'name' to 'type_name' in lookup tables for clarity
+
+

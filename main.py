@@ -1,162 +1,128 @@
 # main.py
+from graph.builder import graph, graph_continue
+from graph.state import GraphState, TaskStatus
+from utils.state_manager import StateManager
+from utils.task_manager import print_task_summary
 import os
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
-
-# LangSmith tracing configuration (uses LANGSMITH_API_KEY from .env)
-os.environ["LANGSMITH_TRACING"] = "true"
-if not os.environ.get("LANGSMITH_PROJECT"):
-    os.environ["LANGSMITH_PROJECT"] = "pr-downright-mainstream-28"
-
-from graph.builder import graph, graph_after_clarification
-from graph.state import GraphState
-from typing import Optional
 
 
-def get_initial_state(
-    requirements: str,
-    dialect: str = "postgresql",
-    user_answers: Optional[list] = None
-) -> GraphState:
-    """Create initial state for the graph."""
-    return {
-        "user_requirements": requirements,
-        "user_answers": user_answers or [],
-        "sql_dialect": dialect,
-        "clarifying_questions": [],
-        "needs_clarification": False,
-        "entities": [],
-        "relationships": [],
-        "tables": [],
-        "validation_issues": [],
-        "iteration_count": 0,
-        "max_iterations": 3,
-        "ddl_script": "",
-        "erd_diagram": "",
-        "current_step": "start",
-        "is_complete": False,
-        "error": None
-    }
+def print_header():
+    print("\n" + "=" * 60)
+    print("🏗️  RDBMS BUILDER (Optimized)")
+    print("=" * 60)
 
 
 def print_questions(questions: list) -> None:
-    """Print clarifying questions in a nice format."""
-    print("\n" + "=" * 60)
+    print("\n" + "=" * 50)
     print("❓ CLARIFICATION NEEDED")
-    print("=" * 60)
-    
+    print("=" * 50)
     for i, q in enumerate(questions, 1):
         print(f"\n{i}. {q['question']}")
-        print(f"   Context: {q['context']}")
-        if q.get('options'):
+        if q.get("options"):
             print(f"   Options: {', '.join(q['options'])}")
-    
-    print("\n" + "=" * 60)
+    print("=" * 50)
 
 
 def get_user_answers(questions: list) -> list:
-    """Interactively get answers from user."""
     answers = []
-    print("\nPlease answer the following questions (or press Enter to skip):\n")
-    
+    print("\nAnswer questions (Enter to skip):\n")
     for i, q in enumerate(questions, 1):
-        print(f"Q{i}: {q['question']}")
-        if q.get('options'):
-            print(f"    Suggested options: {', '.join(q['options'])}")
-        
-        answer = input(f"A{i}: ").strip()
+        answer = input(f"Q{i}: ").strip()
         if answer:
             answers.append(f"Q: {q['question']} A: {answer}")
-    
     return answers
 
 
 def save_outputs(state: GraphState, output_dir: str = "output") -> None:
-    """Save generated outputs to files."""
     os.makedirs(output_dir, exist_ok=True)
+    archive = state["archive"]
+    working = state["working"]
     
-    dialect = state.get('sql_dialect', 'postgresql')
+    if archive.get("ddl_script"):
+        dialect = working.get("sql_dialect", "postgresql")
+        path = os.path.join(output_dir, f"schema_{dialect}.sql")
+        with open(path, "w") as f:
+            f.write(archive["ddl_script"])
+        print(f"📄 DDL: {path}")
     
-    # Save DDL
-    ddl_file = os.path.join(output_dir, f"schema_{dialect}.sql")
-    with open(ddl_file, 'w') as f:
-        f.write(state['ddl_script'])
-    print(f"📄 DDL saved to: {ddl_file}")
-    
-    # Save ERD
-    if state.get('erd_diagram'):
-        erd_file = os.path.join(output_dir, "erd_diagram.mmd")
-        with open(erd_file, 'w') as f:
-            f.write(state['erd_diagram'])
-        print(f"📊 ERD saved to: {erd_file}")
-        
-        # Also save as markdown for easy viewing
-        erd_md_file = os.path.join(output_dir, "erd_diagram.md")
-        with open(erd_md_file, 'w') as f:
-            f.write("# Entity Relationship Diagram\n\n")
-            f.write("```mermaid\n")
-            f.write(state['erd_diagram'])
+    if archive.get("erd_diagram"):
+        path = os.path.join(output_dir, "erd.md")
+        with open(path, "w") as f:
+            f.write("# ERD\n\n```mermaid\n")
+            f.write(archive["erd_diagram"])
             f.write("\n```\n")
-        print(f"📊 ERD (Markdown) saved to: {erd_md_file}")
+        print(f"📊 ERD: {path}")
+    
+    # Task report
+    path = os.path.join(output_dir, "report.txt")
+    with open(path, "w") as f:
+        f.write("RDBMS Builder Report\n")
+        f.write("=" * 40 + "\n\n")
+        for task in archive["tasks"]:
+            f.write(f"[{task['status']}] {task['content']}\n")
+            if task.get("result"):
+                f.write(f"  Result: {task['result']}\n")
+        f.write(f"\nLLM Calls: {archive['total_llm_calls']}\n")
+    print(f"📋 Report: {path}")
 
 
-def run_rdbms_builder(
+def print_critic_summary(state: GraphState) -> None:
+    reports = state["archive"].get("critic_reports", [])
+    if not reports:
+        return
+    
+    print("\n" + "=" * 50)
+    print("🔍 CRITIC SUMMARY")
+    print("=" * 50)
+    for i, r in enumerate(reports, 1):
+        items = len(r.get("feedback_items", []))
+        print(f"  #{i}: Score {r['overall_score']}/10 ({items} items)")
+    print("=" * 50)
+
+
+def run_builder(
     requirements: str,
     dialect: str = "postgresql",
+    enable_critic: bool = True,
     interactive: bool = True
-) -> dict:
-    """
-    Run the RDBMS builder with the given requirements.
+) -> GraphState:
     
-    Args:
-        requirements: Natural language requirements
-        dialect: SQL dialect (postgresql, mysql, sqlite)
-        interactive: Whether to ask clarifying questions interactively
-    """
-    print("=" * 60)
-    print("🚀 RDBMS Builder Starting...")
-    print(f"📝 Target dialect: {dialect.upper()}")
-    print("=" * 60)
-    print(f"\n📋 Requirements:\n{requirements}\n")
+    print_header()
+    print(f"📝 Dialect: {dialect.upper()}")
+    print(f"🔍 Critic: {'On' if enable_critic else 'Off'}")
     print("=" * 60)
     
-    # Phase 1: Check for clarification needs
-    initial_state = get_initial_state(requirements, dialect)
-    state = graph.invoke(initial_state)
+    state = StateManager.create_initial_state(requirements, dialect, enable_critic)
+    state = graph.invoke(state)
     
-    # Handle clarification if needed
-    if state.get('needs_clarification') and state.get('clarifying_questions'):
-        print_questions(state['clarifying_questions'])
-        
-        if interactive:
-            answers = get_user_answers(state['clarifying_questions'])
+    # Handle clarification
+    if state["working"].get("needs_clarification"):
+        questions = state["archive"].get("clarifying_questions", [])
+        if questions:
+            print_questions(questions)
             
-            if answers:
-                # Update requirements with answers and continue
-                enriched_requirements = requirements + "\n\nAdditional clarifications:\n" + "\n".join(answers)
-                state = get_initial_state(enriched_requirements, dialect, answers)
-                state = graph_after_clarification.invoke(state)
+            if interactive:
+                answers = get_user_answers(questions)
+                if answers:
+                    StateManager.add_user_answers(state, answers)
+                state["working"]["needs_clarification"] = False
+                state = graph_continue.invoke(state)
             else:
-                print("\n⚠️ No answers provided, proceeding with original requirements...")
-                state = get_initial_state(requirements, dialect)
-                state['needs_clarification'] = False
-                state = graph_after_clarification.invoke(state)
-        else:
-            print("\n⚠️ Non-interactive mode, proceeding with original requirements...")
-            state = get_initial_state(requirements, dialect)
-            state = graph_after_clarification.invoke(state)
+                state["working"]["needs_clarification"] = False
+                state = graph_continue.invoke(state)
+    
+    print_task_summary(state)
+    print_critic_summary(state)
     
     print("\n" + "=" * 60)
-    print("🎉 RDBMS Builder Complete!")
+    print("🎉 COMPLETE!")
+    print(f"📊 LLM Calls: {state['archive']['total_llm_calls']}")
     print("=" * 60)
     
     return state
 
 
 def main():
-    # Example: Fleet Management System
     requirements = """
     I want to build a fleet management system where:
     - Companies can register and manage their vehicle fleet
@@ -168,63 +134,38 @@ def main():
     - Managers can generate reports on fleet performance
     """
     
-    # Ask user for dialect
     print("\n🔧 Configuration")
     print("-" * 40)
-    print("Available SQL dialects:")
-    print("  1. PostgreSQL (default)")
-    print("  2. MySQL")
-    print("  3. SQLite")
     
-    dialect_choice = input("\nSelect dialect [1-3] (or press Enter for PostgreSQL): ").strip()
+    d = input("Dialect [1=PostgreSQL, 2=MySQL, 3=SQLite]: ").strip()
+    dialect = {"1": "postgresql", "2": "mysql", "3": "sqlite", "": "postgresql"}.get(d, "postgresql")
     
-    dialect_map = {"1": "postgresql", "2": "mysql", "3": "sqlite", "": "postgresql"}
-    dialect = dialect_map.get(dialect_choice, "postgresql")
+    c = input("Enable critic? [Y/n]: ").strip().lower()
+    enable_critic = c != "n"
     
-    # Run the builder
-    result = run_rdbms_builder(requirements, dialect=dialect, interactive=True)
+    result = run_builder(requirements, dialect, enable_critic)
     
-    # Print results
+    # Show DDL
     print("\n" + "=" * 60)
-    print("📄 Generated DDL Script:")
+    print("📄 DDL SCRIPT")
     print("=" * 60)
-    print(result['ddl_script'])
+    ddl = result["archive"].get("ddl_script", "")
+    if len(ddl) > 3000:
+        print(ddl[:3000] + "\n... (truncated)")
+    else:
+        print(ddl)
     
-    if result.get('erd_diagram'):
+    # Show ERD
+    if result["archive"].get("erd_diagram"):
         print("\n" + "=" * 60)
-        print("📊 ERD Diagram (Mermaid):")
+        print("📊 ERD")
         print("=" * 60)
-        print(result['erd_diagram'])
+        print(result["archive"]["erd_diagram"])
     
-    # Save outputs
-    print("\n" + "-" * 60)
-    save_choice = input("💾 Save outputs to files? [Y/n]: ").strip().lower()
-    if save_choice != 'n':
+    # Save
+    s = input("\n💾 Save outputs? [Y/n]: ").strip().lower()
+    if s != "n":
         save_outputs(result)
-    
-    # Print any remaining issues
-    if result.get('validation_issues'):
-        print("\n⚠️  Remaining Issues:")
-        for issue in result['validation_issues']:
-            print(f"   - {issue}")
-
-
-def generate_all_dialects(requirements: str) -> dict:
-    """
-    Generate schemas for all supported dialects.
-    Useful for projects that need to support multiple databases.
-    """
-    results = {}
-    
-    for dialect in ["postgresql", "mysql", "sqlite"]:
-        print(f"\n{'='*60}")
-        print(f"Generating for {dialect.upper()}...")
-        print('='*60)
-        
-        result = run_rdbms_builder(requirements, dialect=dialect, interactive=False)
-        results[dialect] = result
-    
-    return results
 
 
 if __name__ == "__main__":

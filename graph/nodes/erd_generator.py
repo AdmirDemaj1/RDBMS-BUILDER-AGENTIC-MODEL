@@ -1,139 +1,189 @@
 # graph/nodes/erd_generator.py
-from typing import Dict, Any, List
+from typing import List
 from graph.state import GraphState
+from utils.state_manager import StateManager
+from utils.task_manager import start_task, complete_task, fail_task
+from datetime import datetime
 
 
-def generate_mermaid_erd(tables: List[dict], relationships: List[dict]) -> str:
-    """
-    Generate a Mermaid ERD diagram from tables and relationships.
-    """
+def generate_mermaid_erd(tables: List[dict]) -> str:
+    """Generate enhanced Mermaid ERD with annotations for indexes, PII, and RLS."""
     lines = ["erDiagram"]
     
-    # Generate entity definitions with attributes
     for table in tables:
-        table_name = table['name'].upper().replace('_', '-')
-        lines.append(f"    {table_name} {{")
+        name = table["name"].upper().replace("_", "-")
         
-        for col in table['columns']:
-            # Determine key type
-            key_marker = ""
-            if col.get('primary_key'):
-                key_marker = "PK"
-            elif col.get('references'):
-                key_marker = "FK"
-            elif col.get('unique'):
-                key_marker = "UK"
+        # Add table annotations
+        annotations = []
+        if table.get("row_level_security"):
+            annotations.append("🔒RLS")
+        
+        pii_count = sum(1 for c in table["columns"] if c.get("is_pii"))
+        if pii_count:
+            annotations.append(f"⚠️PII:{pii_count}")
+        
+        idx_count = len(table.get("indexes", []))
+        if idx_count:
+            annotations.append(f"📊IDX:{idx_count}")
+        
+        table_comment = f"  %% {' '.join(annotations)}" if annotations else ""
+        lines.append(f"    {name} {{{table_comment}")
+        
+        for col in table["columns"][:15]:
+            key = ""
+            if col.get("primary_key"):
+                key = "PK"
+            elif col.get("references"):
+                key = "FK"
+            elif col.get("unique"):
+                key = "UK"
             
-            # Clean up data type for display
-            data_type = col['data_type'].split('(')[0].lower()
-            col_name = col['name']
+            # Mark PII columns
+            pii_marker = "🔐" if col.get("is_pii") else ""
             
-            if key_marker:
-                lines.append(f"        {data_type} {col_name} {key_marker}")
-            else:
-                lines.append(f"        {data_type} {col_name}")
+            dtype = col["data_type"].split("(")[0].lower()
+            nullable = "" if col.get("nullable", True) else "*"  # * means required
+            
+            lines.append(f"        {dtype} {col['name']}{nullable} {key}{pii_marker}".rstrip())
+        
+        if len(table["columns"]) > 15:
+            lines.append(f"        ... {len(table['columns']) - 15} more columns")
         
         lines.append("    }")
     
     lines.append("")
     
-    # Generate relationships
-    # Build a map of table relationships from foreign keys
-    fk_relationships = []
-    
+    # Relationships from FKs with cardinality
+    seen = set()
     for table in tables:
-        table_name = table['name'].upper().replace('_', '-')
-        for col in table['columns']:
-            if col.get('references'):
-                ref_table = col['references']['table'].upper().replace('_', '-')
-                fk_relationships.append({
-                    'from': ref_table,
-                    'to': table_name,
-                    'type': 'one-to-many'  # FK implies many side
-                })
-    
-    # Also use the relationships from state for better labeling
-    relationship_map = {}
-    for rel in relationships:
-        key = (rel['from_entity'].lower(), rel['to_entity'].lower())
-        relationship_map[key] = rel['type']
-        # Also add reverse
-        reverse_key = (rel['to_entity'].lower(), rel['from_entity'].lower())
-        if rel['type'] == 'one-to-many':
-            relationship_map[reverse_key] = 'many-to-one'
-        elif rel['type'] == 'many-to-many':
-            relationship_map[reverse_key] = 'many-to-many'
-        else:
-            relationship_map[reverse_key] = rel['type']
-    
-    # Deduplicate and generate relationship lines
-    seen_relationships = set()
-    
-    for fk_rel in fk_relationships:
-        from_table = fk_rel['from']
-        to_table = fk_rel['to']
-        
-        # Skip if we've already added this relationship
-        rel_key = tuple(sorted([from_table, to_table]))
-        if rel_key in seen_relationships:
-            continue
-        seen_relationships.add(rel_key)
-        
-        # Determine cardinality
-        # Look up in our relationship map
-        from_clean = from_table.lower().replace('-', '_')
-        to_clean = to_table.lower().replace('-', '_')
-        
-        # Try to find matching relationship
-        rel_type = 'one-to-many'  # default
-        for (e1, e2), rtype in relationship_map.items():
-            # Match by checking if entity names are contained in table names
-            if (e1 in from_clean or from_clean in e1 + 's') and \
-               (e2 in to_clean or to_clean in e2 + 's'):
-                rel_type = rtype
-                break
-            if (e2 in from_clean or from_clean in e2 + 's') and \
-               (e1 in to_clean or to_clean in e1 + 's'):
-                rel_type = rtype
-                break
-        
-        # Mermaid relationship symbols
-        # ||--o{ = one to many
-        # ||--|| = one to one  
-        # }o--o{ = many to many
-        if rel_type == 'one-to-one':
-            connector = "||--||"
-        elif rel_type == 'many-to-many':
-            connector = "}o--o{"
-        else:  # one-to-many
-            connector = "||--o{"
-        
-        lines.append(f"    {from_table} {connector} {to_table} : has")
+        tname = table["name"].upper().replace("_", "-")
+        for col in table["columns"]:
+            if col.get("references"):
+                ref_table = col["references"]["table"].upper().replace("_", "-")
+                on_delete = col["references"].get("on_delete", "RESTRICT")
+                
+                # Create unique key for relationship
+                rel_key = (ref_table, tname, col["name"])
+                if rel_key not in seen:
+                    seen.add(rel_key)
+                    
+                    # Determine cardinality notation
+                    # ||--o{ means one-to-many (one parent, many children)
+                    # ||--|| means one-to-one
+                    # }o--o{ means many-to-many
+                    
+                    is_unique_fk = col.get("unique", False)
+                    is_nullable = col.get("nullable", True)
+                    
+                    if is_unique_fk:
+                        # One-to-one
+                        left = "||"
+                        right = "o|" if is_nullable else "||"
+                    else:
+                        # One-to-many
+                        left = "||"
+                        right = "o{" if is_nullable else "|{"
+                    
+                    # Add ON DELETE info for critical relationships
+                    rel_label = col["name"].replace("_id", "")
+                    if on_delete == "CASCADE":
+                        rel_label += " [CASCADE]"
+                    
+                    lines.append(f"    {ref_table} {left}--{right} {tname} : {rel_label}")
     
     return "\n".join(lines)
 
 
-def erd_generator(state: GraphState) -> Dict[str, Any]:
-    """
-    Node that generates a Mermaid ERD diagram from the schema.
-    """
-    print("\n📊 Generating ERD diagram...")
+def generate_schema_summary(tables: List[dict]) -> str:
+    """Generate a text summary of the schema for documentation."""
+    lines = [
+        "# Schema Summary",
+        "",
+        f"**Tables:** {len(tables)}",
+    ]
     
-    tables = state.get('tables', [])
-    relationships = state.get('relationships', [])
+    total_cols = sum(len(t["columns"]) for t in tables)
+    total_indexes = sum(len(t.get("indexes", [])) for t in tables)
+    total_fks = sum(1 for t in tables for c in t["columns"] if c.get("references"))
+    pii_tables = [t["name"] for t in tables if any(c.get("is_pii") for c in t["columns"])]
+    rls_tables = [t["name"] for t in tables if t.get("row_level_security")]
+    
+    lines.extend([
+        f"**Columns:** {total_cols}",
+        f"**Indexes:** {total_indexes}",
+        f"**Foreign Keys:** {total_fks}",
+        "",
+        "## Security",
+        f"**Tables with PII:** {', '.join(pii_tables) if pii_tables else 'None'}",
+        f"**Tables with RLS:** {', '.join(rls_tables) if rls_tables else 'None'}",
+        "",
+        "## Tables Overview",
+    ])
+    
+    for table in tables:
+        pk_col = next((c["name"] for c in table["columns"] if c.get("primary_key")), "id")
+        fk_count = sum(1 for c in table["columns"] if c.get("references"))
+        idx_count = len(table.get("indexes", []))
+        
+        lines.append(f"- **{table['name']}** ({len(table['columns'])} cols, {fk_count} FKs, {idx_count} indexes)")
+    
+    return "\n".join(lines)
+
+
+def erd_generator(state: GraphState) -> GraphState:
+    start_task(state, "generate_erd")
+    
+    tables = state["working"]["tables"]
     
     if not tables:
-        print("⚠️ No tables to generate ERD from")
-        return {
-            "erd_diagram": "",
-            "current_step": "erd_generation_complete"
-        }
+        fail_task(state, "generate_erd", "No tables")
+        state["working"]["is_complete"] = True
+        return state
     
-    mermaid_erd = generate_mermaid_erd(tables, relationships)
+    try:
+        # Generate ERD diagram
+        erd = generate_mermaid_erd(tables)
+        
+        # Generate schema summary
+        summary = generate_schema_summary(tables)
+        
+        # Combine ERD with summary as markdown
+        full_output = f"""# Entity Relationship Diagram
+
+```mermaid
+{erd}
+```
+
+{summary}
+
+## Legend
+- **PK** = Primary Key
+- **FK** = Foreign Key  
+- **UK** = Unique Key
+- **🔐** = PII (Personal Identifiable Information)
+- **🔒RLS** = Row Level Security enabled
+- **📊IDX** = Indexed columns
+- **\\*** after column name = NOT NULL (required)
+- **[CASCADE]** = ON DELETE CASCADE
+"""
+        
+        state["archive"]["erd_diagram"] = full_output
+        state["archive"]["completed_at"] = datetime.now().isoformat()
+        state["working"]["is_complete"] = True
+        state["working"]["current_step"] = "complete"
+        
+        # Count stats for completion message
+        total_indexes = sum(len(t.get("indexes", [])) for t in tables)
+        pii_count = sum(1 for t in tables for c in t["columns"] if c.get("is_pii"))
+        
+        complete_task(
+            state, 
+            "generate_erd", 
+            f"ERD: {len(tables)} tables, {total_indexes} indexes, {pii_count} PII columns"
+        )
+        
+    except Exception as e:
+        fail_task(state, "generate_erd", str(e))
+        state["working"]["is_complete"] = True
     
-    print(f"✅ ERD diagram generated with {len(tables)} entities")
-    
-    return {
-        "erd_diagram": mermaid_erd,
-        "current_step": "erd_generation_complete"
-    }
+    return state

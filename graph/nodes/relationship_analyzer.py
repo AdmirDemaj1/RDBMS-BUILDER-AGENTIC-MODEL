@@ -1,93 +1,93 @@
 # graph/nodes/relationship_analyzer.py
-from typing import Dict, Any
+from typing import List
 from langchain_core.messages import SystemMessage, HumanMessage
-from graph.state import GraphState, Relationship
+from graph.state import GraphState
 from utils.llm import get_llm
-import json
+from utils.state_manager import StateManager
+from utils.context_builder import ContextBuilder
+from utils.task_manager import start_task, complete_task, fail_task
+from pydantic import BaseModel, Field
+from enum import Enum
 
 
-SYSTEM_PROMPT = """You are a database architect expert. Given a list of entities 
-and the original requirements, identify ALL relationships between entities.
-
-For each relationship, specify:
-1. from_entity: The source entity name
-2. to_entity: The target entity name  
-3. type: One of "one-to-one", "one-to-many", "many-to-many"
-4. description: Brief description of the relationship
-
-Return as a JSON array.
-
-Example:
-[
-    {
-        "from_entity": "User",
-        "to_entity": "Order",
-        "type": "one-to-many",
-        "description": "A user can have multiple orders"
-    },
-    {
-        "from_entity": "Order",
-        "to_entity": "Product",
-        "type": "many-to-many",
-        "description": "An order can contain multiple products, a product can be in multiple orders"
-    }
-]
-
-Guidelines:
-- Consider implicit relationships (e.g., if users create orders, there's a relationship)
-- For many-to-many, we'll need a junction table later
-- Think about ownership, composition, and association relationships
-"""
+class RelType(str, Enum):
+    ONE_TO_ONE = "one-to-one"
+    ONE_TO_MANY = "one-to-many"
+    MANY_TO_ONE = "many-to-one"  # Will be normalized to one-to-many with swapped entities
+    MANY_TO_MANY = "many-to-many"
 
 
-def relationship_analyzer(state: GraphState) -> Dict[str, Any]:
-    """
-    Node that analyzes relationships between extracted entities.
-    """
-    print("\n🔗 Analyzing relationships between entities...")
+class RelationshipSchema(BaseModel):
+    from_entity: str
+    to_entity: str
+    type: RelType
+    description: str
+
+
+class RelationshipsResult(BaseModel):
+    relationships: List[RelationshipSchema]
+
+
+SYSTEM_PROMPT = """Identify relationships between entities.
+
+Types:
+- one-to-one: User↔Profile (FK on dependent side)
+- one-to-many: User→Orders (FK on "many" side)  
+- many-to-many: Students↔Courses (needs junction table)
+
+For each relationship:
+- from_entity: The "one" side (exact entity name)
+- to_entity: The related entity (exact entity name)
+- type: one-to-one, one-to-many, or many-to-many
+- description: Brief business meaning
+
+Check for: Self-references (Category→parent), hierarchies, implicit relationships.
+Every entity should have at least one relationship."""
+
+
+def relationship_analyzer(state: GraphState) -> GraphState:
+    start_task(state, "analyze_relationships")
     
     llm = get_llm()
+    structured_llm = llm.with_structured_output(RelationshipsResult)
     
-    entities_summary = "\n".join([
-        f"- {e['name']}: {e['description']} (attributes: {', '.join(e['attributes'])})"
-        for e in state['entities']
-    ])
+    context = ContextBuilder.for_relationship_analysis(state)
     
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=f"""Original requirements:
-{state['user_requirements']}
-
-Extracted entities:
-{entities_summary}
-
-Identify all relationships between these entities.""")
+        HumanMessage(content=context)
     ]
     
-    response = llm.invoke(messages)
-    
     try:
-        content = response.content
-        if "```json" in content:
-            content = content.split("```json")[1].split("```")[0]
-        elif "```" in content:
-            content = content.split("```")[1].split("```")[0]
-            
-        relationships = json.loads(content.strip())
+        result = structured_llm.invoke(messages)
+        StateManager.increment_llm_calls(state)
         
-        print(f"✅ Found {len(relationships)} relationships")
-        for rel in relationships:
-            print(f"   {rel['from_entity']} --[{rel['type']}]--> {rel['to_entity']}")
+        relationships = []
+        for r in result.relationships:
+            # Normalize many-to-one to one-to-many by swapping entities
+            if r.type == RelType.MANY_TO_ONE:
+                relationships.append({
+                    "from_entity": r.to_entity,  # Swap
+                    "to_entity": r.from_entity,  # Swap
+                    "type": "one-to-many",       # Normalize
+                    "description": r.description
+                })
+            else:
+                relationships.append({
+                    "from_entity": r.from_entity,
+                    "to_entity": r.to_entity,
+                    "type": r.type.value,
+                    "description": r.description
+                })
         
-        return {
-            "relationships": relationships,
-            "current_step": "relationship_analysis_complete"
-        }
+        state["working"]["relationships"] = relationships
+        state["working"]["current_step"] = "relationship_analysis_complete"
         
-    except json.JSONDecodeError as e:
-        print(f"❌ Error parsing relationships: {e}")
-        return {
-            "relationships": [],
-            "error": f"Failed to parse relationships: {e}",
-            "current_step": "error"
-        }
+        complete_task(state, "analyze_relationships", f"Found {len(relationships)} relationships")
+        
+    except Exception as e:
+        fail_task(state, "analyze_relationships", str(e))
+        state["working"]["relationships"] = []
+        state["working"]["current_step"] = "error"
+    
+    return state
