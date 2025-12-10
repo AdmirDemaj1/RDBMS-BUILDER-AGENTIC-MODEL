@@ -11,7 +11,8 @@ from graph.nodes import (
     critic,
     schema_refiner,
     sql_generator,
-    erd_generator
+    erd_generator,
+    nestjs_generator
 )
 
 
@@ -52,6 +53,12 @@ def should_re_critique(state: GraphState) -> str:
     return "generate_outputs"
 
 
+def should_generate_nestjs(state: GraphState) -> str:
+    if state["working"].get("generate_nestjs", True):
+        return "generate_nestjs"
+    return "end"
+
+
 def build_graph() -> StateGraph:
     workflow = StateGraph(GraphState)
     
@@ -65,6 +72,7 @@ def build_graph() -> StateGraph:
     workflow.add_node("refine_schema", schema_refiner)
     workflow.add_node("generate_sql", sql_generator)
     workflow.add_node("generate_erd", erd_generator)
+    workflow.add_node("generate_nestjs", nestjs_generator)
     
     workflow.set_entry_point("plan")
     workflow.add_edge("plan", "clarify")
@@ -94,7 +102,13 @@ def build_graph() -> StateGraph:
     })
     
     workflow.add_edge("generate_sql", "generate_erd")
-    workflow.add_edge("generate_erd", END)
+    
+    workflow.add_conditional_edges("generate_erd", should_generate_nestjs, {
+        "generate_nestjs": "generate_nestjs",
+        "end": END
+    })
+    
+    workflow.add_edge("generate_nestjs", END)
     
     return workflow.compile()
 
@@ -110,6 +124,7 @@ def build_graph_continue() -> StateGraph:
     workflow.add_node("refine_schema", schema_refiner)
     workflow.add_node("generate_sql", sql_generator)
     workflow.add_node("generate_erd", erd_generator)
+    workflow.add_node("generate_nestjs", nestjs_generator)
     
     workflow.set_entry_point("extract_entities")
     
@@ -133,7 +148,13 @@ def build_graph_continue() -> StateGraph:
     })
     
     workflow.add_edge("generate_sql", "generate_erd")
-    workflow.add_edge("generate_erd", END)
+    
+    workflow.add_conditional_edges("generate_erd", should_generate_nestjs, {
+        "generate_nestjs": "generate_nestjs",
+        "end": END
+    })
+    
+    workflow.add_edge("generate_nestjs", END)
     
     return workflow.compile()
 

@@ -5,105 +5,134 @@
 
 ```mermaid
 erDiagram
-    COMPANIES {  %% ⚠️PII:3 📊IDX:4
+    COMPANIES {  %% 🔒RLS ⚠️PII:3 📊IDX:3
         uuid id PK
         timestamptz created_at*
         timestamptz updated_at*
         varchar name*
-        varchar registration_number* UK
         text address 🔐
-        varchar contact_email 🔐
-        varchar contact_phone 🔐
-        boolean is_active*
+        varchar phone 🔐
+        varchar email 🔐
+        varchar registration_number UK
         timestamptz deleted_at
     }
-    VEHICLE-TYPES {  %% 📊IDX:2
+    VEHICLE-TYPES {  %% 📊IDX:3
         uuid id PK
         timestamptz created_at*
         timestamptz updated_at*
-        varchar name* UK
+        varchar type_name* UK
         text description
-        varchar fuel_type*
-        decimal average_fuel_consumption
+        varchar fuel_type
+        integer capacity
+        timestamptz deleted_at
     }
-    VEHICLES {  %% 📊IDX:8
+    MAINTENANCE-TYPES {  %% 📊IDX:2
+        uuid id PK
+        timestamptz created_at*
+        timestamptz updated_at*
+        varchar type_name* UK
+        text description
+        decimal estimated_cost
+        integer estimated_duration
+        timestamptz deleted_at
+    }
+    MANAGERS {  %% 🔒RLS ⚠️PII:4 📊IDX:5
+        uuid id PK
+        timestamptz created_at*
+        timestamptz updated_at*
+        uuid company_id* FK
+        varchar first_name* 🔐
+        varchar last_name* 🔐
+        varchar email* UK🔐
+        varchar phone 🔐
+        varchar department
+        varchar access_level*
+        timestamptz deleted_at
+    }
+    DRIVERS {  %% 🔒RLS ⚠️PII:5 📊IDX:5
+        uuid id PK
+        timestamptz created_at*
+        timestamptz updated_at*
+        uuid company_id* FK
+        varchar first_name* 🔐
+        varchar last_name* 🔐
+        varchar license_number* UK🔐
+        varchar phone 🔐
+        varchar email 🔐
+        date hire_date*
+        timestamptz deleted_at
+    }
+    VEHICLES {  %% 🔒RLS 📊IDX:8
         uuid id PK
         timestamptz created_at*
         timestamptz updated_at*
         uuid company_id* FK
         uuid vehicle_type_id* FK
-        varchar license_plate* UK
         varchar make*
         varchar model*
         integer year*
+        varchar license_plate* UK
         varchar vin* UK
         date purchase_date
-        integer mileage*
+        integer mileage
         varchar status*
         timestamptz deleted_at
     }
-    DRIVERS {  %% ⚠️PII:5 📊IDX:6
+    VEHICLE-ASSIGNMENTS {  %% 🔒RLS 📊IDX:7
         uuid id PK
         timestamptz created_at*
         timestamptz updated_at*
-        varchar first_name* 🔐
-        varchar last_name* 🔐
-        varchar license_number* UK🔐
-        date license_expiry_date*
-        varchar contact_phone 🔐
-        varchar email 🔐
+        uuid driver_id* FK
+        uuid vehicle_id* FK
+        date assignment_date*
+        date end_date
         boolean is_active*
+        text notes
         timestamptz deleted_at
     }
-    ROLES {  %% 📊IDX:2
-        uuid id PK
-        timestamptz created_at*
-        timestamptz updated_at*
-        varchar name* UK
-        text description
-        jsonb permissions*
-    }
-    USERS {  %% 🔒RLS ⚠️PII:3 📊IDX:6
-        uuid id PK
-        timestamptz created_at*
-        timestamptz updated_at*
-        uuid role_id* FK
-        varchar username* UK
-        varchar email* UK🔐
-        varchar first_name* 🔐
-        varchar last_name* 🔐
-        varchar password_hash*
-        boolean is_active*
-        timestamptz last_login_at
-        timestamptz deleted_at
-    }
-    MAINTENANCE-SCHEDULES {  %% 📊IDX:5
+    MAINTENANCE-SCHEDULES {  %% 🔒RLS 📊IDX:6
         uuid id PK
         timestamptz created_at*
         timestamptz updated_at*
         uuid vehicle_id* FK
-        varchar maintenance_type*
-        text description
+        uuid maintenance_type_id* FK
         integer interval_miles
         integer interval_days
-        date last_performed_date
-        date next_due_date
+        date last_performed
+        date next_due
+        text description
         boolean is_active*
+        timestamptz deleted_at
     }
-    FUEL-LOGS {  %% 📊IDX:6
+    MAINTENANCE-RECORDS {  %% 🔒RLS 📊IDX:6
         uuid id PK
         timestamptz created_at*
         timestamptz updated_at*
         uuid vehicle_id* FK
-        uuid driver_id FK
+        uuid maintenance_type_id* FK
+        date performed_date*
+        text description
+        decimal cost
+        integer mileage_at_service
+        varchar service_provider
+        varchar invoice_number
+        timestamptz deleted_at
+    }
+    FUEL-LOGS {  %% 🔒RLS 📊IDX:5
+        uuid id PK
+        timestamptz created_at*
+        timestamptz updated_at*
+        uuid vehicle_id* FK
         date date*
         decimal amount*
         decimal cost*
         decimal price_per_unit*
-        integer odometer*
+        integer mileage
         varchar location
+        varchar receipt_number
+        timestamptz deleted_at
     }
-    LOCATION-LOGS {  %% 📊IDX:5
+    LOCATION-LOGS {  %% 🔒RLS 📊IDX:5
         uuid id PK
         timestamptz created_at*
         timestamptz updated_at*
@@ -114,83 +143,46 @@ erDiagram
         decimal speed
         decimal heading
         decimal accuracy
-    }
-    DRIVER-ASSIGNMENTS {  %% 📊IDX:7
-        uuid id PK
-        timestamptz created_at*
-        timestamptz updated_at*
-        uuid driver_id* FK
-        uuid vehicle_id* FK
-        date start_date*
-        date end_date
-        boolean is_active*
-        text notes
-    }
-    USER-COMPANY-ACCESS {  %% 🔒RLS 📊IDX:7
-        uuid id PK
-        timestamptz created_at*
-        timestamptz updated_at*
-        uuid user_id* FK
-        uuid company_id* FK
-        varchar access_level*
-        date granted_date*
-        uuid granted_by FK
-        boolean is_active*
-    }
-    DRIVER-COMPANY-EMPLOYMENT {  %% 📊IDX:7
-        uuid id PK
-        timestamptz created_at*
-        timestamptz updated_at*
-        uuid driver_id* FK
-        uuid company_id* FK
-        date start_date*
-        date end_date
-        varchar employment_status*
-        varchar position
-        decimal salary
-        text notes
+        decimal altitude
     }
 
-    COMPANIES ||--|{ VEHICLES : company
+    COMPANIES ||--|{ MANAGERS : company [CASCADE]
+    COMPANIES ||--|{ DRIVERS : company [CASCADE]
+    COMPANIES ||--|{ VEHICLES : company [CASCADE]
     VEHICLE-TYPES ||--|{ VEHICLES : vehicle_type
-    ROLES ||--|{ USERS : role
+    DRIVERS ||--|{ VEHICLE-ASSIGNMENTS : driver [CASCADE]
+    VEHICLES ||--|{ VEHICLE-ASSIGNMENTS : vehicle [CASCADE]
     VEHICLES ||--|{ MAINTENANCE-SCHEDULES : vehicle [CASCADE]
+    MAINTENANCE-TYPES ||--|{ MAINTENANCE-SCHEDULES : maintenance_type
+    VEHICLES ||--|{ MAINTENANCE-RECORDS : vehicle [CASCADE]
+    MAINTENANCE-TYPES ||--|{ MAINTENANCE-RECORDS : maintenance_type
     VEHICLES ||--|{ FUEL-LOGS : vehicle [CASCADE]
-    DRIVERS ||--o{ FUEL-LOGS : driver
     VEHICLES ||--|{ LOCATION-LOGS : vehicle [CASCADE]
-    DRIVERS ||--|{ DRIVER-ASSIGNMENTS : driver [CASCADE]
-    VEHICLES ||--|{ DRIVER-ASSIGNMENTS : vehicle [CASCADE]
-    USERS ||--|{ USER-COMPANY-ACCESS : user [CASCADE]
-    COMPANIES ||--|{ USER-COMPANY-ACCESS : company [CASCADE]
-    USERS ||--o{ USER-COMPANY-ACCESS : granted_by
-    DRIVERS ||--|{ DRIVER-COMPANY-EMPLOYMENT : driver [CASCADE]
-    COMPANIES ||--|{ DRIVER-COMPANY-EMPLOYMENT : company [CASCADE]
 ```
 
 # Schema Summary
 
-**Tables:** 12
-**Columns:** 121
-**Indexes:** 65
-**Foreign Keys:** 14
+**Tables:** 11
+**Columns:** 118
+**Indexes:** 55
+**Foreign Keys:** 12
 
 ## Security
-**Tables with PII:** companies, drivers, users
-**Tables with RLS:** users, user_company_access
+**Tables with PII:** companies, managers, drivers
+**Tables with RLS:** companies, managers, drivers, vehicles, vehicle_assignments, maintenance_schedules, maintenance_records, fuel_logs, location_logs
 
 ## Tables Overview
-- **companies** (10 cols, 0 FKs, 4 indexes)
-- **vehicle_types** (7 cols, 0 FKs, 2 indexes)
+- **companies** (9 cols, 0 FKs, 3 indexes)
+- **vehicle_types** (8 cols, 0 FKs, 3 indexes)
+- **maintenance_types** (8 cols, 0 FKs, 2 indexes)
+- **managers** (11 cols, 1 FKs, 5 indexes)
+- **drivers** (11 cols, 1 FKs, 5 indexes)
 - **vehicles** (14 cols, 2 FKs, 8 indexes)
-- **drivers** (11 cols, 0 FKs, 6 indexes)
-- **roles** (6 cols, 0 FKs, 2 indexes)
-- **users** (12 cols, 1 FKs, 6 indexes)
-- **maintenance_schedules** (11 cols, 1 FKs, 5 indexes)
-- **fuel_logs** (11 cols, 2 FKs, 6 indexes)
-- **location_logs** (10 cols, 1 FKs, 5 indexes)
-- **driver_assignments** (9 cols, 2 FKs, 7 indexes)
-- **user_company_access** (9 cols, 3 FKs, 7 indexes)
-- **driver_company_employment** (11 cols, 2 FKs, 7 indexes)
+- **vehicle_assignments** (10 cols, 2 FKs, 7 indexes)
+- **maintenance_schedules** (12 cols, 2 FKs, 6 indexes)
+- **maintenance_records** (12 cols, 2 FKs, 6 indexes)
+- **fuel_logs** (12 cols, 1 FKs, 5 indexes)
+- **location_logs** (11 cols, 1 FKs, 5 indexes)
 
 ## Legend
 - **PK** = Primary Key

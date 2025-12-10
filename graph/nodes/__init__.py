@@ -9,6 +9,7 @@ from .critic import critic
 from .schema_refiner import schema_refiner
 from .sql_generator import sql_generator
 from .erd_generator import erd_generator
+from .nestjs_generator import nestjs_generator
 
 __all__ = [
     "planner",
@@ -20,5 +21,6 @@ __all__ = [
     "critic",
     "schema_refiner",
     "sql_generator",
-    "erd_generator"
+    "erd_generator",
+    "nestjs_generator"
 ]

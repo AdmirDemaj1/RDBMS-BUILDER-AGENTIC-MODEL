@@ -20,7 +20,7 @@ class ExecutionPlan(BaseModel):
 
 PLANNER_PROMPT = """Create an execution plan for database schema generation.
 
-Nodes (in order): clarify, extract_entities, analyze_relationships, design_schema, validate_schema, critic, refine_schema, generate_sql, generate_erd
+Nodes (in order): clarify, extract_entities, analyze_relationships, design_schema, validate_schema, critic, refine_schema, generate_sql, generate_erd, generate_nestjs
 
 For each node, create ONE specific task that:
 - References entities/relationships from requirements
@@ -37,6 +37,7 @@ def planner(state: GraphState) -> GraphState:
     
     working = state["working"]
     enable_critic = working.get("enable_critic", True)
+    generate_nestjs = working.get("generate_nestjs", True)
     requirements = working["user_requirements"]
     
     llm = get_llm()
@@ -56,19 +57,25 @@ def planner(state: GraphState) -> GraphState:
                          "design_schema", "validate_schema", "generate_sql", "generate_erd"}
         if enable_critic:
             required_nodes.update({"critic", "refine_schema"})
+        if generate_nestjs:
+            required_nodes.add("generate_nestjs")
         
         plan_nodes = {t.node_name for t in result.tasks}
         
         if required_nodes.issubset(plan_nodes):
-            tasks = [create_task(t.content, t.node_name) for t in result.tasks]
+            # Filter out generate_nestjs if not enabled
+            filtered_tasks = result.tasks
+            if not generate_nestjs:
+                filtered_tasks = [t for t in result.tasks if t.node_name != "generate_nestjs"]
+            tasks = [create_task(t.content, t.node_name) for t in filtered_tasks]
             print(f"✅ Created plan with {len(tasks)} tasks")
         else:
-            tasks = get_default_tasks(enable_critic)
+            tasks = get_default_tasks(enable_critic, generate_nestjs)
             print("⚠️ Using default plan")
             
     except Exception as e:
         print(f"⚠️ Plan error: {e}, using default")
-        tasks = get_default_tasks(enable_critic)
+        tasks = get_default_tasks(enable_critic, generate_nestjs)
     
     for task in tasks:
         StateManager.add_task(state, task)

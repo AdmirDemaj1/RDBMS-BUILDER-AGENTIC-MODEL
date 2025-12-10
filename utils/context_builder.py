@@ -83,3 +83,45 @@ class ContextBuilder:
                     feedback.append(f"- [{f['severity']}] {f['issue'][:80]}")
         
         return f"Schema:\n{tables}\n\nFeedback:\n" + "\n".join(feedback[:8])
+    
+    @staticmethod
+    def for_nestjs_architecture(state: GraphState) -> str:
+        """Build context for NestJS architecture generation."""
+        working = state["working"]
+        
+        tables_info = []
+        for table in working["tables"]:
+            cols = []
+            for col in table["columns"]:
+                col_info = f"{col['name']} ({col['data_type']})"
+                if col.get("primary_key"):
+                    col_info += " PK"
+                if col.get("references"):
+                    ref = col["references"]
+                    col_info += f" FK→{ref['table']}.{ref['column']}"
+                cols.append(col_info)
+            
+            indexes = [f"idx:{','.join(idx['columns'])}" for idx in table.get("indexes", [])]
+            
+            table_str = f"Table: {table['name']}\n"
+            table_str += f"  Description: {table.get('description', 'N/A')}\n"
+            table_str += f"  Columns: {', '.join(cols)}\n"
+            if indexes:
+                table_str += f"  Indexes: {', '.join(indexes)}"
+            
+            tables_info.append(table_str)
+        
+        relationships_info = []
+        for rel in working.get("relationships", []):
+            relationships_info.append(
+                f"- {rel['from_entity']} --[{rel['type']}]--> {rel['to_entity']}: {rel.get('description', '')}"
+            )
+        
+        context = "## Tables\n\n"
+        context += "\n\n".join(tables_info)
+        
+        if relationships_info:
+            context += "\n\n## Relationships\n\n"
+            context += "\n".join(relationships_info)
+        
+        return context
