@@ -1,6 +1,6 @@
 # Fleet Management System - Architecture Blueprint
 
-> A comprehensive fleet management system that enables companies to register and manage their vehicle fleets, assign drivers, track maintenance schedules, monitor fuel consumption, record GPS locations, and generate performance reports.
+> A comprehensive fleet management system that enables companies to register and manage their vehicle fleets, track drivers, monitor maintenance schedules, record fuel consumption, and track vehicle locations with GPS coordinates. The system supports role-based access control for managers and drivers, with full historical tracking capabilities.
 
 ---
 
@@ -41,10 +41,10 @@ src/
 │   ├── auth-module.controller.ts
 │   ├── auth-module.service.ts
 │   ├── entities/
-│   │   └── managers.entity.ts
+│   │   └── users.entity.ts
 │   └── dto/
-│       ├── create-managers.dto.ts
-│       └── update-managers.dto.ts
+│       ├── create-users.dto.ts
+│       └── update-users.dto.ts
 ├── company-module/
 │   ├── company-module.module.ts
 │   ├── company-module.controller.ts
@@ -54,33 +54,15 @@ src/
 │   └── dto/
 │       ├── create-companies.dto.ts
 │       └── update-companies.dto.ts
-├── manager-module/
-│   ├── manager-module.module.ts
-│   ├── manager-module.controller.ts
-│   ├── manager-module.service.ts
+├── user-module/
+│   ├── user-module.module.ts
+│   ├── user-module.controller.ts
+│   ├── user-module.service.ts
 │   ├── entities/
-│   │   └── managers.entity.ts
+│   │   └── users.entity.ts
 │   └── dto/
-│       ├── create-managers.dto.ts
-│       └── update-managers.dto.ts
-├── driver-module/
-│   ├── driver-module.module.ts
-│   ├── driver-module.controller.ts
-│   ├── driver-module.service.ts
-│   ├── entities/
-│   │   └── drivers.entity.ts
-│   └── dto/
-│       ├── create-drivers.dto.ts
-│       └── update-drivers.dto.ts
-├── vehicle-type-module/
-│   ├── vehicle-type-module.module.ts
-│   ├── vehicle-type-module.controller.ts
-│   ├── vehicle-type-module.service.ts
-│   ├── entities/
-│   │   └── vehicle_types.entity.ts
-│   └── dto/
-│       ├── create-vehicle_types.dto.ts
-│       └── update-vehicle_types.dto.ts
+│       ├── create-users.dto.ts
+│       └── update-users.dto.ts
 ├── vehicle-module/
 │   ├── vehicle-module.module.ts
 │   ├── vehicle-module.controller.ts
@@ -90,24 +72,15 @@ src/
 │   └── dto/
 │       ├── create-vehicles.dto.ts
 │       └── update-vehicles.dto.ts
-├── vehicle-assignment-module/
-│   ├── vehicle-assignment-module.module.ts
-│   ├── vehicle-assignment-module.controller.ts
-│   ├── vehicle-assignment-module.service.ts
+├── driver-module/
+│   ├── driver-module.module.ts
+│   ├── driver-module.controller.ts
+│   ├── driver-module.service.ts
 │   ├── entities/
-│   │   └── vehicle_assignments.entity.ts
+│   │   └── drivers.entity.ts
 │   └── dto/
-│       ├── create-vehicle_assignments.dto.ts
-│       └── update-vehicle_assignments.dto.ts
-├── maintenance-type-module/
-│   ├── maintenance-type-module.module.ts
-│   ├── maintenance-type-module.controller.ts
-│   ├── maintenance-type-module.service.ts
-│   ├── entities/
-│   │   └── maintenance_types.entity.ts
-│   └── dto/
-│       ├── create-maintenance_types.dto.ts
-│       └── update-maintenance_types.dto.ts
+│       ├── create-drivers.dto.ts
+│       └── update-drivers.dto.ts
 ├── maintenance-module/
 │   ├── maintenance-module.module.ts
 │   ├── maintenance-module.controller.ts
@@ -131,19 +104,19 @@ src/
 │   ├── location-module.controller.ts
 │   ├── location-module.service.ts
 │   ├── entities/
-│   │   └── location_logs.entity.ts
+│   │   └── location_trackings.entity.ts
 │   └── dto/
-│       ├── create-location_logs.dto.ts
-│       └── update-location_logs.dto.ts
-├── report-module/
-│   ├── report-module.module.ts
-│   ├── report-module.controller.ts
-│   ├── report-module.service.ts
+│       ├── create-location_trackings.dto.ts
+│       └── update-location_trackings.dto.ts
+├── reports-module/
+│   ├── reports-module.module.ts
+│   ├── reports-module.controller.ts
+│   ├── reports-module.service.ts
 │   ├── entities/
-│   │   └── report-module.entity.ts
+│   │   └── reports-module.entity.ts
 │   └── dto/
-│       ├── create-report-module.dto.ts
-│       └── update-report-module.dto.ts
+│       ├── create-reports-module.dto.ts
+│       └── update-reports-module.dto.ts
 └── database/
     └── database.module.ts
 ```
@@ -158,116 +131,86 @@ graph TD
         AppModule --> AuthModule
         CompanyModule[CompanyModuleModule]
         AppModule --> CompanyModule
-        ManagerModule[ManagerModuleModule]
-        AppModule --> ManagerModule
-        DriverModule[DriverModuleModule]
-        AppModule --> DriverModule
-        VehicleTypeModule[VehicleTypeModuleModule]
-        AppModule --> VehicleTypeModule
+        UserModule[UserModuleModule]
+        AppModule --> UserModule
         VehicleModule[VehicleModuleModule]
         AppModule --> VehicleModule
-        VehicleAssignmentModule[VehicleAssignmentModuleModule]
-        AppModule --> VehicleAssignmentModule
-        MaintenanceTypeModule[MaintenanceTypeModuleModule]
-        AppModule --> MaintenanceTypeModule
+        DriverModule[DriverModuleModule]
+        AppModule --> DriverModule
         MaintenanceModule[MaintenanceModuleModule]
         AppModule --> MaintenanceModule
         FuelModule[FuelModuleModule]
         AppModule --> FuelModule
         LocationModule[LocationModuleModule]
         AppModule --> LocationModule
-        ReportModule[ReportModuleModule]
-        AppModule --> ReportModule
+        ReportsModule[ReportsModuleModule]
+        AppModule --> ReportsModule
     end
 
     AuthModule -.-> Company
-    ManagerModule -.-> Company
-    DriverModule -.-> Company
+    UserModule -.-> Company
+    UserModule -.-> Driver
     VehicleModule -.-> Company
-    VehicleModule -.-> VehicleType
-    VehicleAssignmentModule -.-> Driver
-    VehicleAssignmentModule -.-> Vehicle
+    DriverModule -.-> Company
+    DriverModule -.-> Vehicle
     MaintenanceModule -.-> Vehicle
-    MaintenanceModule -.-> MaintenanceType
     FuelModule -.-> Vehicle
     LocationModule -.-> Vehicle
-    ReportModule -.-> Vehicle
-    ReportModule -.-> Maintenance
-    ReportModule -.-> Fuel
-    ReportModule -.-> Location
-    ReportModule -.-> Driver
+    ReportsModule -.-> Vehicle
+    ReportsModule -.-> Fuel
+    ReportsModule -.-> Maintenance
+    ReportsModule -.-> Location
+    ReportsModule -.-> Driver
 ```
 
 ### Modules Overview
 
 #### AuthModuleModule
 
-Handles authentication and authorization for managers and system users
+Handles user authentication, JWT token management, and session control
 
-- **Entities**: managers
+- **Entities**: users
 - **Components**: Controller, Service, Repository
 - **Dependencies**: CompanyModule
 
 #### CompanyModuleModule
 
-Manages company registration, profile updates, and company-related operations
+Manages company registration, profiles, and company-level operations
 
 - **Entities**: companies
 - **Components**: Controller, Service, Repository
 
-#### ManagerModuleModule
+#### UserModuleModule
 
-Manages company managers, their access levels, and department assignments
+Manages system users, roles, and permissions within companies
 
-- **Entities**: managers
+- **Entities**: users
+- **Components**: Controller, Service, Repository
+- **Dependencies**: CompanyModule, DriverModule
+
+#### VehicleModuleModule
+
+Manages vehicle fleet including registration, updates, and vehicle type management
+
+- **Entities**: vehicles, vehicle_types
 - **Components**: Controller, Service, Repository
 - **Dependencies**: CompanyModule
 
 #### DriverModuleModule
 
-Manages company drivers, their licenses, and employment information
+Manages driver profiles, assignments, and driver-vehicle relationships
 
-- **Entities**: drivers
+- **Entities**: drivers, driver_assignments
 - **Components**: Controller, Service, Repository
-- **Dependencies**: CompanyModule
-
-#### VehicleTypeModuleModule
-
-Manages vehicle type definitions and their characteristics
-
-- **Entities**: vehicle_types
-- **Components**: Controller, Service, Repository
-
-#### VehicleModuleModule
-
-Manages fleet vehicles, their specifications, and status tracking
-
-- **Entities**: vehicles
-- **Components**: Controller, Service, Repository
-- **Dependencies**: CompanyModule, VehicleTypeModule
-
-#### VehicleAssignmentModuleModule
-
-Manages driver-to-vehicle assignments and assignment history
-
-- **Entities**: vehicle_assignments
-- **Components**: Controller, Service, Repository
-- **Dependencies**: DriverModule, VehicleModule
-
-#### MaintenanceTypeModuleModule
-
-Manages maintenance type definitions with cost and duration estimates
-
-- **Entities**: maintenance_types
-- **Components**: Controller, Service, Repository
+- **Dependencies**: CompanyModule, VehicleModule
 
 #### MaintenanceModuleModule
 
-Manages maintenance schedules and historical maintenance records
+Manages vehicle maintenance schedules, types, and tracking
 
-- **Entities**: maintenance_schedules, maintenance_records
+- **Entities**: maintenance_schedules, maintenance_types
 - **Components**: Controller, Service, Repository
-- **Dependencies**: VehicleModule, MaintenanceTypeModule
+- **Dependencies**: VehicleModule
 
 #### FuelModuleModule
 
@@ -279,289 +222,339 @@ Manages fuel consumption logs and fuel-related analytics
 
 #### LocationModuleModule
 
-Manages GPS tracking data and location-based services
+Manages real-time GPS tracking and location history for vehicles
 
-- **Entities**: location_logs
+- **Entities**: location_trackings
 - **Components**: Controller, Service, Repository
 - **Dependencies**: VehicleModule
 
-#### ReportModuleModule
+#### ReportsModuleModule
 
 Generates comprehensive fleet performance and analytics reports
 
 - **Entities**: 
 - **Components**: Controller, Service, Repository
-- **Dependencies**: VehicleModule, MaintenanceModule, FuelModule, LocationModule, DriverModule
+- **Dependencies**: VehicleModule, FuelModule, MaintenanceModule, LocationModule, DriverModule
 
 ## API Endpoints
 
 | Method | Endpoint | Description | Auth | Roles |
 |--------|----------|-------------|------|-------|
-| POST | `/api/auth/login` | Manager login with email and password | ✗ | - |
-| POST | `/api/auth/refresh` | Refresh JWT access token using refresh token | ✗ | - |
-| POST | `/api/auth/logout` | Logout and invalidate tokens | ✓ | - |
-| GET | `/api/auth/profile` | Get current manager profile information | ✓ | - |
-| POST | `/api/companies` | Register a new fleet management company | ✗ | - |
+| POST | `/api/auth/login` | Authenticate user with username/email and password | ✗ | - |
+| POST | `/api/auth/refresh` | Refresh expired JWT token using refresh token | ✗ | - |
+| POST | `/api/auth/logout` | Invalidate user session and tokens | ✓ | - |
+| GET | `/api/auth/profile` | Get current user profile information | ✓ | - |
+| POST | `/api/companies` | Register a new company in the system | ✓ | admin |
 | GET | `/api/companies/:id` | Get company details by ID | ✓ | admin, manager |
-| PUT | `/api/companies/:id` | Update company information | ✓ | admin |
-| DELETE | `/api/companies/:id` | Soft delete a company | ✓ | admin |
-| POST | `/api/managers` | Create a new manager for a company | ✓ | admin |
-| GET | `/api/managers` | Get paginated list of managers with filtering by company, department, access_level | ✓ | admin, manager |
-| GET | `/api/managers/:id` | Get manager details by ID | ✓ | admin, manager |
-| PUT | `/api/managers/:id` | Update manager information | ✓ | admin |
-| DELETE | `/api/managers/:id` | Soft delete a manager | ✓ | admin |
-| POST | `/api/drivers` | Add a new driver to a company | ✓ | admin, manager |
-| GET | `/api/drivers` | Get paginated list of drivers with filtering by company, hire_date range | ✓ | admin, manager |
-| GET | `/api/drivers/:id` | Get driver details by ID | ✓ | admin, manager |
-| PUT | `/api/drivers/:id` | Update driver information | ✓ | admin, manager |
-| DELETE | `/api/drivers/:id` | Soft delete a driver | ✓ | admin, manager |
-| GET | `/api/drivers/:id/assignments` | Get driver's vehicle assignment history | ✓ | admin, manager |
-| POST | `/api/vehicle-types` | Create a new vehicle type | ✓ | admin |
-| GET | `/api/vehicle-types` | Get list of all vehicle types with filtering by fuel_type | ✓ | admin, manager |
-| GET | `/api/vehicle-types/:id` | Get vehicle type details by ID | ✓ | admin, manager |
-| PUT | `/api/vehicle-types/:id` | Update vehicle type information | ✓ | admin |
-| DELETE | `/api/vehicle-types/:id` | Soft delete a vehicle type | ✓ | admin |
-| POST | `/api/vehicles` | Add a new vehicle to company fleet | ✓ | admin, manager |
-| GET | `/api/vehicles` | Get paginated list of vehicles with filtering by company, status, make, model, year | ✓ | admin, manager |
-| GET | `/api/vehicles/:id` | Get vehicle details by ID | ✓ | admin, manager |
-| PUT | `/api/vehicles/:id` | Update vehicle information | ✓ | admin, manager |
-| PATCH | `/api/vehicles/:id/status` | Update vehicle status (active, maintenance, retired) | ✓ | admin, manager |
-| DELETE | `/api/vehicles/:id` | Soft delete a vehicle | ✓ | admin, manager |
-| POST | `/api/vehicle-assignments` | Assign a driver to a vehicle | ✓ | admin, manager |
-| GET | `/api/vehicle-assignments` | Get paginated list of assignments with filtering by driver, vehicle, active status | ✓ | admin, manager |
-| GET | `/api/vehicle-assignments/active` | Get all currently active vehicle assignments | ✓ | admin, manager |
-| PATCH | `/api/vehicle-assignments/:id/end` | End a vehicle assignment | ✓ | admin, manager |
-| GET | `/api/vehicle-assignments/:id` | Get assignment details by ID | ✓ | admin, manager |
-| POST | `/api/maintenance-types` | Create a new maintenance type | ✓ | admin |
-| GET | `/api/maintenance-types` | Get list of all maintenance types | ✓ | admin, manager |
-| GET | `/api/maintenance-types/:id` | Get maintenance type details by ID | ✓ | admin, manager |
-| PUT | `/api/maintenance-types/:id` | Update maintenance type information | ✓ | admin |
-| DELETE | `/api/maintenance-types/:id` | Soft delete a maintenance type | ✓ | admin |
-| POST | `/api/maintenance/schedules` | Create a maintenance schedule for a vehicle | ✓ | admin, manager |
-| GET | `/api/maintenance/schedules` | Get paginated maintenance schedules with filtering by vehicle, due date, active status | ✓ | admin, manager |
-| GET | `/api/maintenance/schedules/due` | Get maintenance schedules due within specified days | ✓ | admin, manager |
-| POST | `/api/maintenance/records` | Record completed maintenance activity | ✓ | admin, manager |
-| GET | `/api/maintenance/records` | Get paginated maintenance records with filtering by vehicle, date range, service provider | ✓ | admin, manager |
-| GET | `/api/maintenance/vehicles/:vehicleId/history` | Get complete maintenance history for a vehicle | ✓ | admin, manager |
-| PUT | `/api/maintenance/schedules/:id` | Update maintenance schedule | ✓ | admin, manager |
-| POST | `/api/fuel-logs` | Record fuel purchase/consumption for a vehicle | ✓ | admin, manager |
-| GET | `/api/fuel-logs` | Get paginated fuel logs with filtering by vehicle, date range, location | ✓ | admin, manager |
-| GET | `/api/fuel-logs/vehicles/:vehicleId` | Get fuel consumption history for a specific vehicle | ✓ | admin, manager |
-| GET | `/api/fuel-logs/analytics/consumption` | Get fuel consumption analytics by vehicle, time period | ✓ | admin, manager |
-| GET | `/api/fuel-logs/analytics/costs` | Get fuel cost analytics and trends | ✓ | admin, manager |
-| PUT | `/api/fuel-logs/:id` | Update fuel log entry | ✓ | admin, manager |
-| DELETE | `/api/fuel-logs/:id` | Soft delete a fuel log entry | ✓ | admin, manager |
-| POST | `/api/location-logs` | Record GPS location data for a vehicle | ✓ | system, admin |
-| POST | `/api/location-logs/batch` | Bulk insert multiple location records | ✓ | system, admin |
-| GET | `/api/location-logs/vehicles/:vehicleId/current` | Get current/latest location of a vehicle | ✓ | admin, manager |
-| GET | `/api/location-logs/vehicles/:vehicleId/history` | Get location history for a vehicle within date range | ✓ | admin, manager |
-| GET | `/api/location-logs/vehicles/:vehicleId/route` | Get route/path taken by vehicle for a specific date | ✓ | admin, manager |
-| GET | `/api/location-logs/fleet/live` | Get live locations of all vehicles in fleet | ✓ | admin, manager |
-| GET | `/api/reports/fleet-overview` | Generate comprehensive fleet overview report | ✓ | admin, manager |
-| GET | `/api/reports/vehicle-utilization` | Generate vehicle utilization report by date range | ✓ | admin, manager |
-| GET | `/api/reports/maintenance-costs` | Generate maintenance cost analysis report | ✓ | admin, manager |
-| GET | `/api/reports/fuel-efficiency` | Generate fuel efficiency report by vehicle and time period | ✓ | admin, manager |
-| GET | `/api/reports/driver-performance` | Generate driver performance report including assignments and vehicle usage | ✓ | admin, manager |
-| POST | `/api/reports/custom` | Generate custom report based on specified parameters | ✓ | admin, manager |
-| GET | `/api/reports/export/:reportType` | Export report data in specified format (PDF, Excel, CSV) | ✓ | admin, manager |
+| PUT | `/api/companies/:id` | Update company information | ✓ | admin, manager |
+| GET | `/api/companies/:id/dashboard` | Get company dashboard with fleet overview statistics | ✓ | manager, admin |
+| POST | `/api/users` | Create a new user account | ✓ | admin, manager |
+| GET | `/api/users` | Get paginated list of users within company | ✓ | manager, admin |
+| GET | `/api/users/:id` | Get user details by ID | ✓ | - |
+| PUT | `/api/users/:id` | Update user information | ✓ | admin, manager |
+| PATCH | `/api/users/:id/status` | Activate or deactivate user account | ✓ | admin, manager |
+| POST | `/api/vehicles` | Register a new vehicle in the fleet | ✓ | manager, admin |
+| GET | `/api/vehicles` | Get paginated list of vehicles with filtering and sorting | ✓ | - |
+| GET | `/api/vehicles/:id` | Get detailed vehicle information | ✓ | - |
+| PUT | `/api/vehicles/:id` | Update vehicle information | ✓ | manager, admin |
+| DELETE | `/api/vehicles/:id` | Remove vehicle from fleet (soft delete) | ✓ | manager, admin |
+| GET | `/api/vehicle-types` | Get list of available vehicle types | ✓ | - |
+| POST | `/api/vehicle-types` | Create new vehicle type | ✓ | admin |
+| POST | `/api/drivers` | Register a new driver | ✓ | manager, admin |
+| GET | `/api/drivers` | Get paginated list of drivers with filtering | ✓ | - |
+| GET | `/api/drivers/:id` | Get driver details with assignment history | ✓ | - |
+| PUT | `/api/drivers/:id` | Update driver information | ✓ | manager, admin |
+| POST | `/api/driver-assignments` | Assign driver to vehicle | ✓ | manager, admin |
+| PATCH | `/api/driver-assignments/:id/end` | End current driver assignment | ✓ | manager, admin |
+| GET | `/api/driver-assignments/history/:vehicleId` | Get assignment history for a specific vehicle | ✓ | - |
+| POST | `/api/maintenance-schedules` | Schedule maintenance for a vehicle | ✓ | manager, admin |
+| GET | `/api/maintenance-schedules` | Get maintenance schedules with filtering by vehicle, date range, completion status | ✓ | - |
+| GET | `/api/maintenance-schedules/overdue` | Get overdue maintenance schedules | ✓ | manager, admin |
+| PATCH | `/api/maintenance-schedules/:id/complete` | Mark maintenance schedule as completed | ✓ | manager, admin |
+| GET | `/api/maintenance-types` | Get list of maintenance types | ✓ | - |
+| POST | `/api/maintenance-types` | Create new maintenance type | ✓ | admin |
+| POST | `/api/fuel-logs` | Record fuel purchase/consumption | ✓ | driver, manager, admin |
+| GET | `/api/fuel-logs` | Get fuel logs with filtering by vehicle, date range, fuel type | ✓ | - |
+| GET | `/api/fuel-logs/vehicle/:vehicleId` | Get fuel consumption history for specific vehicle | ✓ | - |
+| GET | `/api/fuel-logs/analytics/:vehicleId` | Get fuel consumption analytics for vehicle | ✓ | manager, admin |
+| PUT | `/api/fuel-logs/:id` | Update fuel log entry | ✓ | manager, admin |
+| POST | `/api/location-tracking` | Record vehicle GPS location data | ✓ | driver, system |
+| GET | `/api/location-tracking/current/:vehicleId` | Get current location of specific vehicle | ✓ | - |
+| GET | `/api/location-tracking/history/:vehicleId` | Get location history for vehicle within date range | ✓ | manager, admin |
+| GET | `/api/location-tracking/fleet-map` | Get current locations of all vehicles in company fleet | ✓ | manager, admin |
+| GET | `/api/location-tracking/route/:vehicleId` | Get vehicle route for specific date range | ✓ | manager, admin |
+| GET | `/api/reports/fleet-performance` | Generate comprehensive fleet performance report | ✓ | manager, admin |
+| GET | `/api/reports/vehicle-utilization` | Generate vehicle utilization report | ✓ | manager, admin |
+| GET | `/api/reports/fuel-consumption` | Generate fuel consumption analysis report | ✓ | manager, admin |
+| GET | `/api/reports/maintenance-costs` | Generate maintenance cost analysis report | ✓ | manager, admin |
+| GET | `/api/reports/driver-performance` | Generate driver performance report | ✓ | manager, admin |
+| POST | `/api/reports/custom` | Generate custom report with specified parameters | ✓ | manager, admin |
 
 ## Data Flows
 
 These diagrams show how requests flow through the application.
 
-### Create Vehicle Assignment
+### Create Vehicle
 
-**Trigger**: `POST /api/vehicle-assignments`
+**Trigger**: `POST /api/vehicles`
 
 ```mermaid
 sequenceDiagram
     participant Client
-    participant VehicleAssignmentController
-    participant JwtAuthGuard
-    participant RolesGuard
+    participant VehicleController
+    participant CompanyGuard
     participant ValidationPipe
-    participant VehicleAssignmentService
-    participant VehicleAssignmentRepository
+    participant VehicleService
+    participant VehicleRepository
     participant ResponseTransformInterceptor
-    Note over Client: POST /api/vehicle-assignments
-    Client->>+VehicleAssignmentController: Receive assignment request with driver_id, vehicle_id, assignment_date
-    VehicleAssignmentController->>+JwtAuthGuard: Validate JWT token and extract manager information
-    JwtAuthGuard->>+RolesGuard: Check if manager has admin or manager role
-    RolesGuard->>+ValidationPipe: Validate CreateVehicleAssignmentDto structure and constraints
-    ValidationPipe->>+VehicleAssignmentService: Check if driver and vehicle belong to same company as manager
-    VehicleAssignmentService->>+VehicleAssignmentService: Validate driver is not already assigned to another vehicle
-    VehicleAssignmentService->>+VehicleAssignmentService: Validate vehicle is not already assigned to another driver
-    VehicleAssignmentService->>+VehicleAssignmentService: End any existing active assignments for the driver and vehicle
-    VehicleAssignmentService->>+VehicleAssignmentRepository: Create new vehicle assignment record in database
-    VehicleAssignmentRepository->>+ResponseTransformInterceptor: Transform response to standard API format with created assignment data
-    VehicleAssignmentRepository-->>-ResponseTransformInterceptor: Response
-    VehicleAssignmentService-->>-VehicleAssignmentRepository: Response
-    ValidationPipe-->>-VehicleAssignmentService: Response
-    RolesGuard-->>-ValidationPipe: Response
-    JwtAuthGuard-->>-RolesGuard: Response
-    VehicleAssignmentController-->>-JwtAuthGuard: Response
-    VehicleAssignmentController-->>-Client: HTTP Response
+    participant LoggingInterceptor
+    Note over Client: POST /api/vehicles
+    Client->>+VehicleController: Receive CreateVehicleDto, validate user authentication and manager role
+    VehicleController->>+CompanyGuard: Verify user belongs to company specified in request
+    CompanyGuard->>+ValidationPipe: Validate DTO fields, check required fields and data types
+    ValidationPipe->>+VehicleService: Check for duplicate VIN and license plate within company
+    VehicleService->>+VehicleRepository: Create vehicle record in database with company association
+    VehicleRepository->>+ResponseTransformInterceptor: Transform response to standard format with created vehicle data
+    ResponseTransformInterceptor->>+LoggingInterceptor: Log vehicle creation event for audit trail
+    ResponseTransformInterceptor-->>-LoggingInterceptor: Response
+    VehicleRepository-->>-ResponseTransformInterceptor: Response
+    VehicleService-->>-VehicleRepository: Response
+    ValidationPipe-->>-VehicleService: Response
+    CompanyGuard-->>-ValidationPipe: Response
+    VehicleController-->>-CompanyGuard: Response
+    VehicleController-->>-Client: HTTP Response
 ```
 
 **Steps**:
 
-1. **VehicleAssignmentController**: Receive assignment request with driver_id, vehicle_id, assignment_date
-2. **JwtAuthGuard**: Validate JWT token and extract manager information
-3. **RolesGuard**: Check if manager has admin or manager role
-4. **ValidationPipe**: Validate CreateVehicleAssignmentDto structure and constraints
-5. **VehicleAssignmentService**: Check if driver and vehicle belong to same company as manager
-6. **VehicleAssignmentService**: Validate driver is not already assigned to another vehicle
-7. **VehicleAssignmentService**: Validate vehicle is not already assigned to another driver
-8. **VehicleAssignmentService**: End any existing active assignments for the driver and vehicle
-9. **VehicleAssignmentRepository**: Create new vehicle assignment record in database
-10. **ResponseTransformInterceptor**: Transform response to standard API format with created assignment data
+1. **VehicleController**: Receive CreateVehicleDto, validate user authentication and manager role
+2. **CompanyGuard**: Verify user belongs to company specified in request
+3. **ValidationPipe**: Validate DTO fields, check required fields and data types
+4. **VehicleService**: Check for duplicate VIN and license plate within company
+5. **VehicleRepository**: Create vehicle record in database with company association
+6. **ResponseTransformInterceptor**: Transform response to standard format with created vehicle data
+7. **LoggingInterceptor**: Log vehicle creation event for audit trail
 
-### Get Fleet Live Locations
+### Real-time Location Tracking
 
-**Trigger**: `GET /api/location-logs/fleet/live`
+**Trigger**: `POST /api/location-tracking`
 
 ```mermaid
 sequenceDiagram
     participant Client
     participant LocationController
     participant JwtAuthGuard
-    participant RolesGuard
-    participant CacheInterceptor
+    participant RateLimitMiddleware
+    participant ValidationPipe
     participant LocationService
     participant LocationRepository
-    participant ResponseTransformInterceptor
-    Note over Client: GET /api/location-logs/fleet/live
-    Client->>+LocationController: Receive request for live fleet locations
-    LocationController->>+JwtAuthGuard: Validate JWT token and extract manager information
-    JwtAuthGuard->>+RolesGuard: Check if manager has admin or manager role
-    RolesGuard->>+CacheInterceptor: Check if live location data exists in Redis cache (30 second TTL)
-    CacheInterceptor->>+LocationService: Get all vehicles belonging to manager's company
-    LocationService->>+LocationRepository: Query latest location record for each vehicle in the fleet
-    LocationRepository->>+LocationService: Filter out stale location data (older than 10 minutes)
-    LocationService->>+LocationService: Enrich location data with vehicle and driver information
-    LocationService->>+CacheInterceptor: Store result in Redis cache with 30 second expiration
-    CacheInterceptor->>+ResponseTransformInterceptor: Transform response to include fleet live location data
-    LocationRepository-->>-ResponseTransformInterceptor: Response
+    participant WebSocketGateway
+    Note over Client: POST /api/location-tracking
+    Client->>+LocationController: Receive GPS coordinates from vehicle tracking device or mobile app
+    LocationController->>+JwtAuthGuard: Validate driver or system authentication token
+    JwtAuthGuard->>+RateLimitMiddleware: Check rate limits to prevent excessive location updates
+    RateLimitMiddleware->>+ValidationPipe: Validate GPS coordinates, timestamp, and accuracy data
+    ValidationPipe->>+LocationService: Process location data, calculate speed and heading if needed
+    LocationService->>+LocationRepository: Store location record in database with optimized indexing
+    LocationRepository->>+WebSocketGateway: Broadcast real-time location update to connected fleet managers
+    LocationRepository-->>-WebSocketGateway: Response
     LocationService-->>-LocationRepository: Response
-    CacheInterceptor-->>-LocationService: Response
-    RolesGuard-->>-CacheInterceptor: Response
-    JwtAuthGuard-->>-RolesGuard: Response
+    ValidationPipe-->>-LocationService: Response
+    RateLimitMiddleware-->>-ValidationPipe: Response
+    JwtAuthGuard-->>-RateLimitMiddleware: Response
     LocationController-->>-JwtAuthGuard: Response
     LocationController-->>-Client: HTTP Response
 ```
 
 **Steps**:
 
-1. **LocationController**: Receive request for live fleet locations
-2. **JwtAuthGuard**: Validate JWT token and extract manager information
-3. **RolesGuard**: Check if manager has admin or manager role
-4. **CacheInterceptor**: Check if live location data exists in Redis cache (30 second TTL)
-5. **LocationService**: Get all vehicles belonging to manager's company
-6. **LocationRepository**: Query latest location record for each vehicle in the fleet
-7. **LocationService**: Filter out stale location data (older than 10 minutes)
-8. **LocationService**: Enrich location data with vehicle and driver information
-9. **CacheInterceptor**: Store result in Redis cache with 30 second expiration
-10. **ResponseTransformInterceptor**: Transform response to include fleet live location data
+1. **LocationController**: Receive GPS coordinates from vehicle tracking device or mobile app
+2. **JwtAuthGuard**: Validate driver or system authentication token
+3. **RateLimitMiddleware**: Check rate limits to prevent excessive location updates
+4. **ValidationPipe**: Validate GPS coordinates, timestamp, and accuracy data
+5. **LocationService**: Process location data, calculate speed and heading if needed
+6. **LocationRepository**: Store location record in database with optimized indexing
+7. **WebSocketGateway**: Broadcast real-time location update to connected fleet managers
 
-### Generate Fleet Overview Report
+### Generate Fleet Performance Report
 
-**Trigger**: `GET /api/reports/fleet-overview`
+**Trigger**: `GET /api/reports/fleet-performance`
 
 ```mermaid
 sequenceDiagram
     participant Client
-    participant ReportController
-    participant JwtAuthGuard
+    participant ReportsController
     participant RolesGuard
-    participant ValidationPipe
-    participant ReportService
-    participant ResponseTransformInterceptor
-    Note over Client: GET /api/reports/fleet-overview
-    Client->>+ReportController: Receive fleet overview report request with optional date range filters
-    ReportController->>+JwtAuthGuard: Validate JWT token and extract manager information
-    JwtAuthGuard->>+RolesGuard: Check if manager has admin or manager role
-    RolesGuard->>+ValidationPipe: Validate query parameters for date range and filters
-    ValidationPipe->>+ReportService: Aggregate vehicle count, active assignments, and fleet status
-    ReportService->>+ReportService: Calculate total maintenance costs and upcoming maintenance
-    ReportService->>+ReportService: Analyze fuel consumption trends and costs
-    ReportService->>+ReportService: Calculate vehicle utilization rates and mileage statistics
-    ReportService->>+ReportService: Compile comprehensive fleet overview with KPIs and trends
-    ReportService->>+ResponseTransformInterceptor: Transform response to include formatted report data
-    ReportService-->>-ResponseTransformInterceptor: Response
-    ValidationPipe-->>-ReportService: Response
-    RolesGuard-->>-ValidationPipe: Response
-    JwtAuthGuard-->>-RolesGuard: Response
-    ReportController-->>-JwtAuthGuard: Response
-    ReportController-->>-Client: HTTP Response
-```
-
-**Steps**:
-
-1. **ReportController**: Receive fleet overview report request with optional date range filters
-2. **JwtAuthGuard**: Validate JWT token and extract manager information
-3. **RolesGuard**: Check if manager has admin or manager role
-4. **ValidationPipe**: Validate query parameters for date range and filters
-5. **ReportService**: Aggregate vehicle count, active assignments, and fleet status
-6. **ReportService**: Calculate total maintenance costs and upcoming maintenance
-7. **ReportService**: Analyze fuel consumption trends and costs
-8. **ReportService**: Calculate vehicle utilization rates and mileage statistics
-9. **ReportService**: Compile comprehensive fleet overview with KPIs and trends
-10. **ResponseTransformInterceptor**: Transform response to include formatted report data
-
-### Record Fuel Log Entry
-
-**Trigger**: `POST /api/fuel-logs`
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant FuelController
-    participant JwtAuthGuard
-    participant RolesGuard
-    participant ValidationPipe
+    participant CompanyGuard
+    participant ReportsService
+    participant VehicleService
     participant FuelService
-    participant FuelRepository
-    participant ResponseTransformInterceptor
-    Note over Client: POST /api/fuel-logs
-    Client->>+FuelController: Receive fuel log data with vehicle_id, date, amount, cost, location
-    FuelController->>+JwtAuthGuard: Validate JWT token and extract manager information
-    JwtAuthGuard->>+RolesGuard: Check if manager has admin or manager role
-    RolesGuard->>+ValidationPipe: Validate CreateFuelLogDto with business rules and constraints
-    ValidationPipe->>+FuelService: Verify vehicle belongs to manager's company
-    FuelService->>+FuelService: Calculate price_per_unit if not provided (cost / amount)
-    FuelService->>+FuelService: Validate fuel log date is not in future and reasonable
-    FuelService->>+FuelRepository: Insert fuel log record into database
-    FuelRepository->>+FuelService: Update vehicle mileage if provided in fuel log
-    FuelService->>+ResponseTransformInterceptor: Transform response to include created fuel log data
-    FuelRepository-->>-ResponseTransformInterceptor: Response
-    FuelService-->>-FuelRepository: Response
-    ValidationPipe-->>-FuelService: Response
-    RolesGuard-->>-ValidationPipe: Response
-    JwtAuthGuard-->>-RolesGuard: Response
-    FuelController-->>-JwtAuthGuard: Response
-    FuelController-->>-Client: HTTP Response
+    participant MaintenanceService
+    participant CacheInterceptor
+    Note over Client: GET /api/reports/fleet-performance
+    Client->>+ReportsController: Receive report request with date range and filter parameters
+    ReportsController->>+RolesGuard: Verify user has manager or admin role for report access
+    RolesGuard->>+CompanyGuard: Ensure report scope is limited to user's company data
+    CompanyGuard->>+ReportsService: Aggregate data from multiple services (Vehicle, Fuel, Maintenance, Location)
+    ReportsService->>+VehicleService: Fetch vehicle utilization and mileage data
+    VehicleService->>+FuelService: Calculate fuel consumption metrics and cost analysis
+    FuelService->>+MaintenanceService: Retrieve maintenance costs and schedule compliance data
+    MaintenanceService->>+ReportsService: Compile comprehensive report with charts and analytics
+    ReportsService->>+CacheInterceptor: Cache report results for improved performance on repeated requests
+    MaintenanceService-->>-CacheInterceptor: Response
+    FuelService-->>-MaintenanceService: Response
+    VehicleService-->>-FuelService: Response
+    ReportsService-->>-VehicleService: Response
+    CompanyGuard-->>-ReportsService: Response
+    RolesGuard-->>-CompanyGuard: Response
+    ReportsController-->>-RolesGuard: Response
+    ReportsController-->>-Client: HTTP Response
 ```
 
 **Steps**:
 
-1. **FuelController**: Receive fuel log data with vehicle_id, date, amount, cost, location
-2. **JwtAuthGuard**: Validate JWT token and extract manager information
-3. **RolesGuard**: Check if manager has admin or manager role
-4. **ValidationPipe**: Validate CreateFuelLogDto with business rules and constraints
-5. **FuelService**: Verify vehicle belongs to manager's company
-6. **FuelService**: Calculate price_per_unit if not provided (cost / amount)
-7. **FuelService**: Validate fuel log date is not in future and reasonable
-8. **FuelRepository**: Insert fuel log record into database
-9. **FuelService**: Update vehicle mileage if provided in fuel log
-10. **ResponseTransformInterceptor**: Transform response to include created fuel log data
+1. **ReportsController**: Receive report request with date range and filter parameters
+2. **RolesGuard**: Verify user has manager or admin role for report access
+3. **CompanyGuard**: Ensure report scope is limited to user's company data
+4. **ReportsService**: Aggregate data from multiple services (Vehicle, Fuel, Maintenance, Location)
+5. **VehicleService**: Fetch vehicle utilization and mileage data
+6. **FuelService**: Calculate fuel consumption metrics and cost analysis
+7. **MaintenanceService**: Retrieve maintenance costs and schedule compliance data
+8. **ReportsService**: Compile comprehensive report with charts and analytics
+9. **CacheInterceptor**: Cache report results for improved performance on repeated requests
+
+### Assign Driver to Vehicle
+
+**Trigger**: `POST /api/driver-assignments`
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant DriverController
+    participant RolesGuard
+    participant ValidationPipe
+    participant DriverService
+    participant VehicleService
+    participant DriverAssignmentRepository
+    participant NotificationService
+    Note over Client: POST /api/driver-assignments
+    Client->>+DriverController: Receive assignment request with vehicle_id, driver_id, and start_date
+    DriverController->>+RolesGuard: Verify user has manager or admin role for assignment operations
+    RolesGuard->>+ValidationPipe: Validate assignment data and check date format
+    ValidationPipe->>+DriverService: Check if driver is available and not currently assigned to another vehicle
+    DriverService->>+VehicleService: Verify vehicle exists and is not currently assigned to another driver
+    VehicleService->>+DriverService: End any existing active assignments for both driver and vehicle
+    DriverService->>+DriverAssignmentRepository: Create new assignment record with is_active=true
+    DriverAssignmentRepository->>+NotificationService: Send assignment notification to driver and relevant managers
+    DriverAssignmentRepository-->>-NotificationService: Response
+    VehicleService-->>-DriverAssignmentRepository: Response
+    DriverService-->>-VehicleService: Response
+    ValidationPipe-->>-DriverService: Response
+    RolesGuard-->>-ValidationPipe: Response
+    DriverController-->>-RolesGuard: Response
+    DriverController-->>-Client: HTTP Response
+```
+
+**Steps**:
+
+1. **DriverController**: Receive assignment request with vehicle_id, driver_id, and start_date
+2. **RolesGuard**: Verify user has manager or admin role for assignment operations
+3. **ValidationPipe**: Validate assignment data and check date format
+4. **DriverService**: Check if driver is available and not currently assigned to another vehicle
+5. **VehicleService**: Verify vehicle exists and is not currently assigned to another driver
+6. **DriverService**: End any existing active assignments for both driver and vehicle
+7. **DriverAssignmentRepository**: Create new assignment record with is_active=true
+8. **NotificationService**: Send assignment notification to driver and relevant managers
 
 ## Security
 
 ### Guards
 
+#### JwtAuthGuard
+- **Purpose**: Validates JWT tokens and ensures user authentication
+- **Applies to**: All protected endpoints except /api/auth/login and /api/auth/refresh
+
+#### RolesGuard
+- **Purpose**: Enforces role-based access control (admin, manager, driver)
+- **Applies to**: Endpoints requiring specific roles, /api/companies/*, /api/users/*, /api/reports/*
+
+#### CompanyGuard
+- **Purpose**: Ensures users can only access data within their own company
+- **Applies to**: All data endpoints to enforce company-level data isolation
+
+#### DriverSelfAccessGuard
+- **Purpose**: Allows drivers to access only their own profile and assigned vehicle data
+- **Applies to**: /api/drivers/:id, /api/vehicles (filtered), /api/fuel-logs (own vehicle only)
 
 ### Interceptors
 
+#### LoggingInterceptor
+- **Purpose**: Logs all API requests and responses for audit trail
+- **Applies to**: global
+
+#### ResponseTransformInterceptor
+- **Purpose**: Standardizes API response format with metadata
+- **Applies to**: global
+
+#### CacheInterceptor
+- **Purpose**: Caches frequently accessed data like vehicle types and maintenance types
+- **Applies to**: /api/vehicle-types, /api/maintenance-types, /api/companies/:id/dashboard
+
+#### CompanyFilterInterceptor
+- **Purpose**: Automatically filters data by user's company context
+- **Applies to**: All data retrieval endpoints
+
+### Pipes
+
+- **ValidationPipe**: Validates request DTOs and transforms data types
+- **ParseUUIDPipe**: Validates and parses UUID parameters in routes
+- **DefaultValuesPipe**: Sets default values for optional query parameters like pagination
+
+### Middlewares
+
+#### CorsMiddleware
+- **Purpose**: Handles Cross-Origin Resource Sharing for frontend applications
+- **Routes**: *
+
+#### RateLimitMiddleware
+- **Purpose**: Implements rate limiting to prevent API abuse
+- **Routes**: /api/auth/*, /api/location-tracking
+
+#### RequestIdMiddleware
+- **Purpose**: Generates unique request IDs for tracing and debugging
+- **Routes**: *
 
 ## Configuration
+
+### Environment Variables
+
+```env
+DATABASE_URL=
+JWT_SECRET=
+JWT_EXPIRATION_TIME=
+REFRESH_TOKEN_SECRET=
+REFRESH_TOKEN_EXPIRATION_TIME=
+REDIS_URL=
+CORS_ORIGIN=
+API_PORT=
+NODE_ENV=
+LOG_LEVEL=
+RATE_LIMIT_TTL=
+RATE_LIMIT_MAX_REQUESTS=
+WEBSOCKET_PORT=
+FILE_UPLOAD_MAX_SIZE=
+ENCRYPTION_KEY=
+```
+
+### External Integrations
+
+- Redis - Caching and session management
+- WebSocket Gateway - Real-time location updates and notifications
+- Email Service (SendGrid/AWS SES) - User notifications and reports
+- File Storage (AWS S3/Google Cloud Storage) - Document and image storage
+- GPS Tracking API - Integration with vehicle tracking devices
+- Mapping Service (Google Maps/Mapbox) - Route visualization and geocoding
+- SMS Service - Critical alerts and notifications
+- PDF Generation Service - Report generation and export
+- Monitoring Service (DataDog/New Relic) - Application performance monitoring
 

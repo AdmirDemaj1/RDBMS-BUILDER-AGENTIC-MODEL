@@ -5,17 +5,17 @@
 
 ### POST `/api/auth/login`
 
-Manager login with email and password
+Authenticate user with username/email and password
 
-**Request Body**: LoginDto with email and password
+**Request Body**: LoginDto (username/email, password)
 
-**Response**: JWT access token and refresh token
+**Response**: JWT access token, refresh token, user profile
 
 ---
 
 ### POST `/api/auth/refresh`
 
-Refresh JWT access token using refresh token
+Refresh expired JWT token using refresh token
 
 **Request Body**: RefreshTokenDto
 
@@ -25,7 +25,7 @@ Refresh JWT access token using refresh token
 
 ### POST `/api/auth/logout`
 
-Logout and invalidate tokens
+Invalidate user session and tokens
 
 **Response**: Success confirmation
 
@@ -33,9 +33,9 @@ Logout and invalidate tokens
 
 ### GET `/api/auth/profile`
 
-Get current manager profile information
+Get current user profile information
 
-**Response**: Manager profile data
+**Response**: User profile with company and role details
 
 ---
 
@@ -44,9 +44,9 @@ Get current manager profile information
 
 ### POST `/api/companies`
 
-Register a new fleet management company
+Register a new company in the system
 
-**Request Body**: CreateCompanyDto with name, address, phone, email, registration_number
+**Request Body**: CreateCompanyDto (name, address, phone, email, registration_number)
 
 **Response**: Created company details
 
@@ -56,7 +56,7 @@ Register a new fleet management company
 
 Get company details by ID
 
-**Response**: Company information
+**Response**: Company profile information
 
 ---
 
@@ -70,160 +70,60 @@ Update company information
 
 ---
 
-### DELETE `/api/companies/:id`
+### GET `/api/companies/:id/dashboard`
 
-Soft delete a company
+Get company dashboard with fleet overview statistics
 
-**Response**: Deletion confirmation
-
----
-
-
-## Managers
-
-### POST `/api/managers`
-
-Create a new manager for a company
-
-**Request Body**: CreateManagerDto with company_id, personal info, department, access_level
-
-**Response**: Created manager details
-
----
-
-### GET `/api/managers`
-
-Get paginated list of managers with filtering by company, department, access_level
-
-**Response**: Paginated manager list
-
----
-
-### GET `/api/managers/:id`
-
-Get manager details by ID
-
-**Response**: Manager information
-
----
-
-### PUT `/api/managers/:id`
-
-Update manager information
-
-**Request Body**: UpdateManagerDto
-
-**Response**: Updated manager details
-
----
-
-### DELETE `/api/managers/:id`
-
-Soft delete a manager
-
-**Response**: Deletion confirmation
+**Response**: Dashboard data with vehicle count, active drivers, maintenance alerts
 
 ---
 
 
-## Drivers
+## Users
 
-### POST `/api/drivers`
+### POST `/api/users`
 
-Add a new driver to a company
+Create a new user account
 
-**Request Body**: CreateDriverDto with company_id, personal info, license_number, hire_date
+**Request Body**: CreateUserDto (username, email, first_name, last_name, role, company_id, driver_id?)
 
-**Response**: Created driver details
-
----
-
-### GET `/api/drivers`
-
-Get paginated list of drivers with filtering by company, hire_date range
-
-**Response**: Paginated driver list
+**Response**: Created user details
 
 ---
 
-### GET `/api/drivers/:id`
+### GET `/api/users`
 
-Get driver details by ID
+Get paginated list of users within company
 
-**Response**: Driver information
-
----
-
-### PUT `/api/drivers/:id`
-
-Update driver information
-
-**Request Body**: UpdateDriverDto
-
-**Response**: Updated driver details
+**Response**: Paginated user list with filtering options
 
 ---
 
-### DELETE `/api/drivers/:id`
+### GET `/api/users/:id`
 
-Soft delete a driver
+Get user details by ID
 
-**Response**: Deletion confirmation
-
----
-
-### GET `/api/drivers/:id/assignments`
-
-Get driver's vehicle assignment history
-
-**Response**: List of vehicle assignments
+**Response**: User profile information
 
 ---
 
+### PUT `/api/users/:id`
 
-## Vehicle Types
+Update user information
 
-### POST `/api/vehicle-types`
+**Request Body**: UpdateUserDto
 
-Create a new vehicle type
-
-**Request Body**: CreateVehicleTypeDto with type_name, description, fuel_type, capacity
-
-**Response**: Created vehicle type details
+**Response**: Updated user details
 
 ---
 
-### GET `/api/vehicle-types`
+### PATCH `/api/users/:id/status`
 
-Get list of all vehicle types with filtering by fuel_type
+Activate or deactivate user account
 
-**Response**: List of vehicle types
+**Request Body**: UpdateUserStatusDto (is_active)
 
----
-
-### GET `/api/vehicle-types/:id`
-
-Get vehicle type details by ID
-
-**Response**: Vehicle type information
-
----
-
-### PUT `/api/vehicle-types/:id`
-
-Update vehicle type information
-
-**Request Body**: UpdateVehicleTypeDto
-
-**Response**: Updated vehicle type details
-
----
-
-### DELETE `/api/vehicle-types/:id`
-
-Soft delete a vehicle type
-
-**Response**: Deletion confirmation
+**Response**: Updated user status
 
 ---
 
@@ -232,9 +132,9 @@ Soft delete a vehicle type
 
 ### POST `/api/vehicles`
 
-Add a new vehicle to company fleet
+Register a new vehicle in the fleet
 
-**Request Body**: CreateVehicleDto with company_id, vehicle_type_id, make, model, year, license_plate, vin, purchase_date
+**Request Body**: CreateVehicleDto (company_id, vehicle_type_id, make, model, year, license_plate, vin, mileage)
 
 **Response**: Created vehicle details
 
@@ -242,17 +142,17 @@ Add a new vehicle to company fleet
 
 ### GET `/api/vehicles`
 
-Get paginated list of vehicles with filtering by company, status, make, model, year
+Get paginated list of vehicles with filtering and sorting
 
-**Response**: Paginated vehicle list
+**Response**: Paginated vehicle list with company and type details
 
 ---
 
 ### GET `/api/vehicles/:id`
 
-Get vehicle details by ID
+Get detailed vehicle information
 
-**Response**: Vehicle information with current assignment
+**Response**: Vehicle details with current driver assignment and maintenance status
 
 ---
 
@@ -266,180 +166,162 @@ Update vehicle information
 
 ---
 
-### PATCH `/api/vehicles/:id/status`
-
-Update vehicle status (active, maintenance, retired)
-
-**Request Body**: UpdateVehicleStatusDto
-
-**Response**: Updated vehicle status
-
----
-
 ### DELETE `/api/vehicles/:id`
 
-Soft delete a vehicle
+Remove vehicle from fleet (soft delete)
 
 **Response**: Deletion confirmation
 
 ---
 
 
-## Vehicle Assignments
+## Vehicle Types
 
-### POST `/api/vehicle-assignments`
+### GET `/api/vehicle-types`
 
-Assign a driver to a vehicle
+Get list of available vehicle types
 
-**Request Body**: CreateVehicleAssignmentDto with driver_id, vehicle_id, assignment_date, notes
+**Response**: List of vehicle types with descriptions
+
+---
+
+### POST `/api/vehicle-types`
+
+Create new vehicle type
+
+**Request Body**: CreateVehicleTypeDto (type_name, description)
+
+**Response**: Created vehicle type
+
+---
+
+
+## Drivers
+
+### POST `/api/drivers`
+
+Register a new driver
+
+**Request Body**: CreateDriverDto (company_id, first_name, last_name, license_number, phone, email, hire_date)
+
+**Response**: Created driver details
+
+---
+
+### GET `/api/drivers`
+
+Get paginated list of drivers with filtering
+
+**Response**: Paginated driver list with current vehicle assignments
+
+---
+
+### GET `/api/drivers/:id`
+
+Get driver details with assignment history
+
+**Response**: Driver profile with current and historical vehicle assignments
+
+---
+
+### PUT `/api/drivers/:id`
+
+Update driver information
+
+**Request Body**: UpdateDriverDto
+
+**Response**: Updated driver details
+
+---
+
+
+## Driver Assignments
+
+### POST `/api/driver-assignments`
+
+Assign driver to vehicle
+
+**Request Body**: CreateDriverAssignmentDto (vehicle_id, driver_id, start_date)
 
 **Response**: Created assignment details
 
 ---
 
-### GET `/api/vehicle-assignments`
+### PATCH `/api/driver-assignments/:id/end`
 
-Get paginated list of assignments with filtering by driver, vehicle, active status
+End current driver assignment
 
-**Response**: Paginated assignment list
+**Request Body**: EndAssignmentDto (end_date)
 
----
-
-### GET `/api/vehicle-assignments/active`
-
-Get all currently active vehicle assignments
-
-**Response**: List of active assignments
+**Response**: Updated assignment with end date
 
 ---
 
-### PATCH `/api/vehicle-assignments/:id/end`
+### GET `/api/driver-assignments/history/:vehicleId`
 
-End a vehicle assignment
+Get assignment history for a specific vehicle
 
-**Request Body**: EndAssignmentDto with end_date and notes
-
-**Response**: Updated assignment with end_date
+**Response**: List of historical driver assignments
 
 ---
 
-### GET `/api/vehicle-assignments/:id`
 
-Get assignment details by ID
+## Maintenance Schedules
 
-**Response**: Assignment information
+### POST `/api/maintenance-schedules`
+
+Schedule maintenance for a vehicle
+
+**Request Body**: CreateMaintenanceScheduleDto (vehicle_id, maintenance_type_id, description, scheduled_date, due_date, mileage_interval)
+
+**Response**: Created maintenance schedule
+
+---
+
+### GET `/api/maintenance-schedules`
+
+Get maintenance schedules with filtering by vehicle, date range, completion status
+
+**Response**: Paginated maintenance schedules list
+
+---
+
+### GET `/api/maintenance-schedules/overdue`
+
+Get overdue maintenance schedules
+
+**Response**: List of overdue maintenance items
+
+---
+
+### PATCH `/api/maintenance-schedules/:id/complete`
+
+Mark maintenance schedule as completed
+
+**Request Body**: CompleteMaintenanceDto (completion_date, notes)
+
+**Response**: Updated maintenance schedule
 
 ---
 
 
 ## Maintenance Types
 
-### POST `/api/maintenance-types`
-
-Create a new maintenance type
-
-**Request Body**: CreateMaintenanceTypeDto with type_name, description, estimated_cost, estimated_duration
-
-**Response**: Created maintenance type details
-
----
-
 ### GET `/api/maintenance-types`
 
-Get list of all maintenance types
+Get list of maintenance types
 
-**Response**: List of maintenance types
-
----
-
-### GET `/api/maintenance-types/:id`
-
-Get maintenance type details by ID
-
-**Response**: Maintenance type information
+**Response**: List of maintenance types with default intervals
 
 ---
 
-### PUT `/api/maintenance-types/:id`
+### POST `/api/maintenance-types`
 
-Update maintenance type information
+Create new maintenance type
 
-**Request Body**: UpdateMaintenanceTypeDto
+**Request Body**: CreateMaintenanceTypeDto (type_name, description, default_interval)
 
-**Response**: Updated maintenance type details
-
----
-
-### DELETE `/api/maintenance-types/:id`
-
-Soft delete a maintenance type
-
-**Response**: Deletion confirmation
-
----
-
-
-## Maintenance
-
-### POST `/api/maintenance/schedules`
-
-Create a maintenance schedule for a vehicle
-
-**Request Body**: CreateMaintenanceScheduleDto with vehicle_id, maintenance_type_id, intervals, description
-
-**Response**: Created schedule details
-
----
-
-### GET `/api/maintenance/schedules`
-
-Get paginated maintenance schedules with filtering by vehicle, due date, active status
-
-**Response**: Paginated schedule list
-
----
-
-### GET `/api/maintenance/schedules/due`
-
-Get maintenance schedules due within specified days
-
-**Response**: List of due maintenance schedules
-
----
-
-### POST `/api/maintenance/records`
-
-Record completed maintenance activity
-
-**Request Body**: CreateMaintenanceRecordDto with vehicle_id, maintenance_type_id, performed_date, cost, description
-
-**Response**: Created maintenance record
-
----
-
-### GET `/api/maintenance/records`
-
-Get paginated maintenance records with filtering by vehicle, date range, service provider
-
-**Response**: Paginated maintenance records
-
----
-
-### GET `/api/maintenance/vehicles/:vehicleId/history`
-
-Get complete maintenance history for a vehicle
-
-**Response**: Vehicle maintenance history
-
----
-
-### PUT `/api/maintenance/schedules/:id`
-
-Update maintenance schedule
-
-**Request Body**: UpdateMaintenanceScheduleDto
-
-**Response**: Updated schedule details
+**Response**: Created maintenance type
 
 ---
 
@@ -448,9 +330,9 @@ Update maintenance schedule
 
 ### POST `/api/fuel-logs`
 
-Record fuel purchase/consumption for a vehicle
+Record fuel purchase/consumption
 
-**Request Body**: CreateFuelLogDto with vehicle_id, date, amount, cost, price_per_unit, mileage, location
+**Request Body**: CreateFuelLogDto (vehicle_id, date, amount, cost, odometer, fuel_type, location)
 
 **Response**: Created fuel log entry
 
@@ -458,33 +340,25 @@ Record fuel purchase/consumption for a vehicle
 
 ### GET `/api/fuel-logs`
 
-Get paginated fuel logs with filtering by vehicle, date range, location
+Get fuel logs with filtering by vehicle, date range, fuel type
 
-**Response**: Paginated fuel log list
-
----
-
-### GET `/api/fuel-logs/vehicles/:vehicleId`
-
-Get fuel consumption history for a specific vehicle
-
-**Response**: Vehicle fuel history
+**Response**: Paginated fuel logs list
 
 ---
 
-### GET `/api/fuel-logs/analytics/consumption`
+### GET `/api/fuel-logs/vehicle/:vehicleId`
 
-Get fuel consumption analytics by vehicle, time period
+Get fuel consumption history for specific vehicle
 
-**Response**: Fuel consumption analytics data
+**Response**: Vehicle fuel consumption records
 
 ---
 
-### GET `/api/fuel-logs/analytics/costs`
+### GET `/api/fuel-logs/analytics/:vehicleId`
 
-Get fuel cost analytics and trends
+Get fuel consumption analytics for vehicle
 
-**Response**: Fuel cost analytics data
+**Response**: Fuel efficiency metrics, cost analysis, consumption trends
 
 ---
 
@@ -494,89 +368,79 @@ Update fuel log entry
 
 **Request Body**: UpdateFuelLogDto
 
-**Response**: Updated fuel log details
-
----
-
-### DELETE `/api/fuel-logs/:id`
-
-Soft delete a fuel log entry
-
-**Response**: Deletion confirmation
+**Response**: Updated fuel log
 
 ---
 
 
-## Location Logs
+## Location Tracking
 
-### POST `/api/location-logs`
+### POST `/api/location-tracking`
 
-Record GPS location data for a vehicle
+Record vehicle GPS location data
 
-**Request Body**: CreateLocationLogDto with vehicle_id, timestamp, latitude, longitude, speed, heading
+**Request Body**: CreateLocationTrackingDto (vehicle_id, latitude, longitude, timestamp, speed, heading, accuracy)
 
-**Response**: Created location log entry
-
----
-
-### POST `/api/location-logs/batch`
-
-Bulk insert multiple location records
-
-**Request Body**: Array of CreateLocationLogDto
-
-**Response**: Batch insert confirmation
+**Response**: Created location record
 
 ---
 
-### GET `/api/location-logs/vehicles/:vehicleId/current`
+### GET `/api/location-tracking/current/:vehicleId`
 
-Get current/latest location of a vehicle
+Get current location of specific vehicle
 
-**Response**: Current vehicle location
-
----
-
-### GET `/api/location-logs/vehicles/:vehicleId/history`
-
-Get location history for a vehicle within date range
-
-**Response**: Vehicle location history
+**Response**: Latest GPS coordinates and movement data
 
 ---
 
-### GET `/api/location-logs/vehicles/:vehicleId/route`
+### GET `/api/location-tracking/history/:vehicleId`
 
-Get route/path taken by vehicle for a specific date
+Get location history for vehicle within date range
 
-**Response**: Vehicle route data
+**Response**: Historical GPS tracking data
 
 ---
 
-### GET `/api/location-logs/fleet/live`
+### GET `/api/location-tracking/fleet-map`
 
-Get live locations of all vehicles in fleet
+Get current locations of all vehicles in company fleet
 
-**Response**: Fleet live location data
+**Response**: Real-time fleet location data for map display
+
+---
+
+### GET `/api/location-tracking/route/:vehicleId`
+
+Get vehicle route for specific date range
+
+**Response**: Route data with waypoints and timestamps
 
 ---
 
 
 ## Reports
 
-### GET `/api/reports/fleet-overview`
+### GET `/api/reports/fleet-performance`
 
-Generate comprehensive fleet overview report
+Generate comprehensive fleet performance report
 
-**Response**: Fleet overview analytics
+**Response**: Fleet utilization, fuel efficiency, maintenance costs, driver performance metrics
 
 ---
 
 ### GET `/api/reports/vehicle-utilization`
 
-Generate vehicle utilization report by date range
+Generate vehicle utilization report
 
-**Response**: Vehicle utilization analytics
+**Response**: Vehicle usage statistics, idle time, mileage reports
+
+---
+
+### GET `/api/reports/fuel-consumption`
+
+Generate fuel consumption analysis report
+
+**Response**: Fuel costs, efficiency trends, consumption by vehicle/driver
 
 ---
 
@@ -584,41 +448,25 @@ Generate vehicle utilization report by date range
 
 Generate maintenance cost analysis report
 
-**Response**: Maintenance cost analytics
-
----
-
-### GET `/api/reports/fuel-efficiency`
-
-Generate fuel efficiency report by vehicle and time period
-
-**Response**: Fuel efficiency analytics
+**Response**: Maintenance expenses, upcoming schedules, cost per vehicle
 
 ---
 
 ### GET `/api/reports/driver-performance`
 
-Generate driver performance report including assignments and vehicle usage
+Generate driver performance report
 
-**Response**: Driver performance analytics
+**Response**: Driver efficiency metrics, fuel consumption, route optimization
 
 ---
 
 ### POST `/api/reports/custom`
 
-Generate custom report based on specified parameters
+Generate custom report with specified parameters
 
-**Request Body**: CustomReportDto with report parameters and filters
+**Request Body**: CustomReportDto (report_type, date_range, filters, metrics)
 
-**Response**: Custom report data
-
----
-
-### GET `/api/reports/export/:reportType`
-
-Export report data in specified format (PDF, Excel, CSV)
-
-**Response**: Report file download
+**Response**: Custom report data based on specified criteria
 
 ---
 

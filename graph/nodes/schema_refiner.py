@@ -35,6 +35,7 @@ class TableSchema(BaseModel):
     description: str
     columns: List[ColumnSchema]
     indexes: List[IndexSchema] = []
+    constraints: List[str] = []  # Table-level CHECK constraints
     enable_rls: bool = False
 
 
@@ -44,6 +45,10 @@ class RefinedSchema(BaseModel):
 
 
 REFINER_PROMPT = """Apply critic feedback to create a production-optimized schema.
+
+## Column Definitions
+CRITICAL: Every column MUST have both 'name' and 'data_type' fields defined.
+NEVER create a column entry with only a constraint - use the table's 'constraints' array instead.
 
 ## Priority Order
 1. CRITICAL issues (must fix)
@@ -64,6 +69,11 @@ REFINER_PROMPT = """Apply critic feedback to create a production-optimized schem
 - Enable RLS (enable_rls=true) for multi-tenant or user-data tables
 - Add CHECK constraints for status/enum columns
 - Specify ON DELETE action for all FKs (CASCADE, RESTRICT, SET NULL)
+
+## Constraints
+- Column-level constraints: use check_constraint field on the column (e.g., "age > 0")
+- Table-level constraints: use the table's constraints array (e.g., "end_date >= start_date")
+- NEVER add a column entry that only contains a constraint without name/data_type
 
 ## Integrity Fixes
 - Add NOT NULL on required fields
@@ -117,7 +127,7 @@ def convert_to_dict(schema: RefinedSchema) -> tuple:
             "description": table.description,
             "columns": columns,
             "indexes": indexes,
-            "constraints": [],
+            "constraints": table.constraints,
             "row_level_security": table.enable_rls
         })
     
@@ -170,7 +180,16 @@ def schema_refiner(state: GraphState) -> GraphState:
         complete_task(state, "refine_schema", f"Applied {len(changes)} improvements")
         
     except Exception as e:
-        fail_task(state, "refine_schema", str(e))
+        from pydantic import ValidationError
+        error_msg = str(e)
+        
+        # Provide more detailed error for validation issues
+        if isinstance(e, ValidationError):
+            error_msg = f"Schema validation failed: {e.error_count()} errors. "
+            error_msg += "LLM may have returned malformed column definitions. "
+            error_msg += "Check that all columns have 'name' and 'data_type' fields."
+        
+        fail_task(state, "refine_schema", error_msg)
         state["working"]["current_step"] = "refine_failed"
     
     return state
