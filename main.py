@@ -93,8 +93,9 @@ def save_nestjs_architecture(architecture: dict, output_dir: str) -> None:
         f.write("2. [Module Architecture](#module-architecture)\n")
         f.write("3. [API Endpoints](#api-endpoints)\n")
         f.write("4. [Data Flows](#data-flows)\n")
-        f.write("5. [Security](#security)\n")
-        f.write("6. [Configuration](#configuration)\n\n")
+        f.write("5. [Event-Driven Architecture](#event-driven-architecture)\n")
+        f.write("6. [Security](#security)\n")
+        f.write("7. [Configuration](#configuration)\n\n")
         f.write("---\n\n")
         
         # Directory Structure
@@ -153,6 +154,46 @@ def save_nestjs_architecture(architecture: dict, output_dir: str) -> None:
             for step in flow.get("steps", []):
                 f.write(f"{step['step']}. **{step['component']}**: {step['action']}\n")
             f.write("\n")
+        
+        # Event-Driven Architecture
+        f.write("## Event-Driven Architecture\n\n")
+        
+        event_patterns = architecture.get("event_patterns", [])
+        message_queue = architecture.get("message_queue")
+        
+        if event_patterns:
+            if message_queue:
+                f.write(f"**Message Queue**: {message_queue}\n\n")
+            
+            f.write("### Event Patterns\n\n")
+            f.write("This system uses event-driven architecture for asynchronous processing and real-time updates.\n\n")
+            
+            for event in event_patterns:
+                f.write(f"#### `{event['event_name']}`\n\n")
+                f.write(f"- **Trigger**: {event['trigger']}\n")
+                f.write(f"- **Purpose**: {event['purpose']}\n")
+                f.write(f"- **Consumers**: {', '.join(event['consumers'])}\n\n")
+            
+            f.write("### Implementation Guide\n\n")
+            f.write("1. Install event emitter: `npm install @nestjs/event-emitter`\n")
+            if message_queue:
+                if "RabbitMQ" in message_queue:
+                    f.write("2. Install message queue: `npm install @nestjs/microservices amqplib`\n")
+                elif "Redis" in message_queue:
+                    f.write("2. Install message queue: `npm install @nestjs/microservices ioredis`\n")
+                elif "AWS" in message_queue:
+                    f.write("2. Install message queue: `npm install @nestjs/microservices aws-sdk`\n")
+            f.write("3. Import EventEmitterModule in AppModule\n")
+            f.write("4. Emit events: `this.eventEmitter.emit('event.name', payload)`\n")
+            f.write("5. Listen with decorators: `@OnEvent('event.name')`\n\n")
+        else:
+            f.write("**Event-driven architecture is not required** for this system based on the current requirements.\n\n")
+            f.write("Consider adding events if you need:\n")
+            f.write("- Real-time notifications\n")
+            f.write("- Async background processing\n")
+            f.write("- Webhooks or external integrations\n")
+            f.write("- Audit logging\n")
+            f.write("- Cache invalidation patterns\n\n")
         
         # Security
         f.write("## Security\n\n")

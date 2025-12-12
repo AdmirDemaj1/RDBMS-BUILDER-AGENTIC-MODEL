@@ -32,7 +32,7 @@ class ColumnSchema(BaseModel):
 
 class TableSchema(BaseModel):
     name: str
-    description: str
+    description: str = Field(default="", max_length=50, description="Max 5 words describing table purpose")
     columns: List[ColumnSchema]
     indexes: List[IndexSchema] = []
     constraints: List[str] = []  # Table-level CHECK constraints
@@ -43,58 +43,21 @@ class DatabaseSchema(BaseModel):
     tables: List[TableSchema]
 
 
-SYSTEM_PROMPT = """Design a production-grade, optimized database schema.
+SYSTEM_PROMPT = """Design database schema. Be ULTRA-CONCISE. Focus on STRUCTURE ONLY.
 
-## STRUCTURE
-Every table MUST have: id (UUID PK DEFAULT gen_random_uuid()), created_at (TIMESTAMPTZ DEFAULT NOW()), updated_at (TIMESTAMPTZ DEFAULT NOW())
+REQUIRED on every table:
+- id (UUID), created_at, updated_at (TIMESTAMPTZ), deleted_at
+- Index EVERY FK column
+- Mark PII columns: is_pii=true
 
-Naming: tables=plural snake_case, columns=singular snake_case, FKs={table_singular}_id
+Types: TIMESTAMPTZ | DECIMAL | VARCHAR(n) | UUID
 
-## COLUMN DEFINITIONS
-CRITICAL: Every column MUST have both 'name' and 'data_type' fields defined.
-NEVER create a column entry with only a constraint - use the table's 'constraints' array instead.
-
-## OPTIMIZATION
-Indexes (CRITICAL for performance):
-- Primary keys are auto-indexed
-- Add indexes on ALL foreign keys (idx_{table}_{column})
-- Add indexes on columns used in WHERE/ORDER BY (status, created_at, email)
-- Use composite indexes for common query patterns (user_id + created_at)
-- Use UNIQUE indexes for natural keys
-- Consider partial indexes for filtered queries (WHERE status = 'active')
-
-Data Types (choose optimal):
-- UUID for PKs (distributed-safe), BIGSERIAL for high-insert tables
-- VARCHAR(n) with appropriate limits (email:255, phone:20, slug:100)
-- TEXT only for truly unbounded content
-- TIMESTAMPTZ (not TIMESTAMP) for timezone-aware dates
-- DECIMAL(12,2) for money, NEVER use FLOAT
-- JSONB for flexible data (with GIN index if queried)
-- Use enums or CHECK constraints for status fields
-
-## CONSTRAINTS
-- Column-level constraints: use check_constraint field on the column (e.g., "age > 0")
-- Table-level constraints: use the table's constraints array (e.g., "end_date >= start_date")
-- NEVER add a column entry that only contains a constraint without name/data_type
-
-## SECURITY
-Mark PII columns (is_pii=true): email, phone, address, ssn, ip_address, name
-Enable Row Level Security (enable_rls=true) for: multi-tenant tables, user data
-Add CHECK constraints for data validation (age > 0, status IN ('active','inactive'))
-
-## RELATIONSHIPS
-- 1:N → FK on "many" side with ON DELETE action (CASCADE for owned data, RESTRICT for references)
-- M:N → junction table with composite PK or id + unique constraint
-- 1:1 → FK + UNIQUE on dependent side
-- Self-references → nullable FK (parent_id)
-
-## BEST PRACTICES
-- Soft delete: add deleted_at TIMESTAMPTZ column instead of hard delete
-- Versioning: add version INTEGER DEFAULT 1 for optimistic locking
-- Audit: consider created_by/updated_by UUID references to users
-- Denormalize carefully: only for proven read-heavy patterns
-
-Output complete schema with indexes for every FK and common query columns."""
+Rules:
+- Tables: plural_snake_case
+- Columns: singular_snake_case  
+- Every column needs 'name' + 'data_type'
+- Table descriptions: MAX 3 WORDS
+- Keep it SIMPLE - refinement will add optimizations later"""
 
 
 def convert_to_dict(schema: DatabaseSchema) -> List[dict]:
@@ -145,7 +108,9 @@ def convert_to_dict(schema: DatabaseSchema) -> List[dict]:
 def schema_designer(state: GraphState) -> GraphState:
     start_task(state, "design_schema")
     
-    llm = get_llm()
+    # Use high max_tokens but ultra-concise prompt for initial design
+    # Refinement will add detailed optimizations
+    llm = get_llm(max_tokens=8192)
     structured_llm = llm.with_structured_output(DatabaseSchema)
     
     context = ContextBuilder.for_schema_design(state)
@@ -159,7 +124,15 @@ def schema_designer(state: GraphState) -> GraphState:
         result = structured_llm.invoke(messages)
         StateManager.increment_llm_calls(state)
         
+        # Validate we got tables
+        if not result.tables:
+            raise ValueError("LLM returned empty tables list")
+        
         tables = convert_to_dict(result)
+        
+        # Double-check we have actual tables
+        if not tables:
+            raise ValueError("Conversion resulted in empty tables")
         
         state["working"]["tables"] = tables
         state["working"]["current_step"] = "schema_design_complete"
@@ -172,11 +145,18 @@ def schema_designer(state: GraphState) -> GraphState:
         from pydantic import ValidationError
         error_msg = str(e)
         
-        # Provide more detailed error for validation issues
+        # Provide detailed error information
         if isinstance(e, ValidationError):
+            print(f"   ⚠️  Pydantic Validation Error Details:")
+            for err in e.errors()[:3]:  # Show first 3 errors
+                print(f"      - {err.get('loc')}: {err.get('msg')}")
             error_msg = f"Schema validation failed: {e.error_count()} errors. "
-            error_msg += "LLM may have returned malformed column definitions. "
-            error_msg += "Check that all columns have 'name' and 'data_type' fields."
+            error_msg += "LLM output was incomplete or malformed. "
+        elif "max_tokens" in error_msg.lower() or "incomplete" in error_msg.lower():
+            print(f"   ⚠️  Token limit issue detected - output may be truncated")
+            error_msg = "LLM output truncated (max_tokens too low for complex schema). "
+        else:
+            print(f"   ⚠️  Schema design error: {error_msg[:200]}")
         
         fail_task(state, "design_schema", error_msg)
         state["working"]["tables"] = []

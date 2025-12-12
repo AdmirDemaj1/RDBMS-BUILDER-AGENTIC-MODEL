@@ -13,201 +13,111 @@ from pydantic import BaseModel, Field
 # PYDANTIC MODELS FOR STRUCTURED OUTPUT
 # ============================================================
 
-class EndpointSchema(BaseModel):
-    method: str = Field(description="HTTP method: GET, POST, PUT, PATCH, DELETE")
-    path: str = Field(description="Full route path like /api/users/:id")
-    description: str = Field(description="What this endpoint does")
-    request_body: Optional[str] = Field(default=None, description="Request body description or DTO name")
-    response: str = Field(description="Response description")
-    auth_required: bool = Field(default=True, description="Whether authentication is required")
-    roles: List[str] = Field(default=[], description="Required roles if any")
+class SimpleEndpoint(BaseModel):
+    """Simplified endpoint schema - just the essentials"""
+    method: str = Field(description="HTTP method")
+    path: str = Field(description="Route path like /api/users/:id")
+    description: str = Field(description="Brief description")
 
 
-class ModuleSchema(BaseModel):
+class SimpleModule(BaseModel):
+    """Simplified module schema"""
     name: str = Field(description="Module name in PascalCase")
-    description: str = Field(description="What this module handles")
-    entities: List[str] = Field(description="Database entities this module manages")
-    dependencies: List[str] = Field(default=[], description="Other modules this depends on")
-    endpoints: List[EndpointSchema] = Field(default=[], description="REST endpoints for this module")
+    entities: List[str] = Field(description="Entities this module manages")
+    key_endpoints: List[str] = Field(description="List of key endpoint paths like ['/api/users', '/api/users/:id']")
 
 
-class DataFlowStep(BaseModel):
-    step: int = Field(description="Step number in the flow")
-    component: str = Field(description="Component name: Controller, Service, Repository, etc.")
-    action: str = Field(description="What happens at this step")
-
-
-class DataFlow(BaseModel):
-    name: str = Field(description="Flow name like 'Create User' or 'Get Vehicle List'")
-    trigger: str = Field(description="What triggers this flow, e.g., 'POST /api/users'")
-    steps: List[DataFlowStep] = Field(description="Steps in the data flow")
-
-
-class GuardSchema(BaseModel):
-    name: str = Field(description="Guard name like JwtAuthGuard, RolesGuard")
-    purpose: str = Field(description="What this guard protects/validates")
-    applies_to: List[str] = Field(description="Endpoints or modules it applies to")
-
-
-class InterceptorSchema(BaseModel):
-    name: str = Field(description="Interceptor name")
-    purpose: str = Field(description="What this interceptor does")
-    applies_to: List[str] = Field(description="Where it's applied: global, module, or specific endpoints")
-
-
-class PipeSchema(BaseModel):
-    name: str = Field(description="Pipe name like ValidationPipe")
-    purpose: str = Field(description="What this pipe does")
-
-
-class MiddlewareSchema(BaseModel):
-    name: str = Field(description="Middleware name")
-    purpose: str = Field(description="What this middleware handles")
-    routes: List[str] = Field(description="Routes this middleware applies to")
+class EventPattern(BaseModel):
+    """Event-driven architecture pattern"""
+    event_name: str = Field(description="Event name like 'user.created', 'vehicle.location.updated'")
+    trigger: str = Field(description="What triggers this event")
+    consumers: List[str] = Field(description="Services/modules that consume this event")
+    purpose: str = Field(description="Why this event is needed (max 10 words)")
 
 
 class NestJSArchitectureSchema(BaseModel):
+    """Simplified architecture schema - focus on core structure"""
     project_name: str = Field(description="Project name")
-    description: str = Field(description="Brief description of the backend system")
-    modules: List[ModuleSchema] = Field(description="Application modules")
-    data_flows: List[DataFlow] = Field(description="Key data flow examples showing request lifecycle")
-    guards: List[GuardSchema] = Field(default=[], description="Authentication/Authorization guards")
-    interceptors: List[InterceptorSchema] = Field(default=[], description="Request/Response interceptors")
-    pipes: List[PipeSchema] = Field(default=[], description="Data transformation/validation pipes")
-    middlewares: List[MiddlewareSchema] = Field(default=[], description="HTTP middlewares")
-    environment_variables: List[str] = Field(default=[], description="Required environment variables")
-    external_integrations: List[str] = Field(default=[], description="External services/APIs to integrate")
+    description: str = Field(description="Brief system description")
+    modules: List[SimpleModule] = Field(description="Application modules (one per main entity)")
+    key_endpoints: List[SimpleEndpoint] = Field(description="Most important API endpoints (max 10)")
+    security_guards: List[str] = Field(default=[], description="Guard names like ['JwtAuthGuard', 'RolesGuard']")
+    environment_variables: List[str] = Field(default=[], description="Required env vars like ['DATABASE_URL', 'JWT_SECRET']")
+    event_patterns: List[EventPattern] = Field(default=[], description="Event-driven patterns if needed for real-time/async operations")
+    message_queue: Optional[str] = Field(default=None, description="Message queue technology if events are used (e.g., 'RabbitMQ', 'Redis', 'AWS SQS')")
 
 
 # ============================================================
 # SYSTEM PROMPT
 # ============================================================
 
-SYSTEM_PROMPT = """You are an expert NestJS architect. Generate a comprehensive backend architecture blueprint based on the database schema and business requirements provided.
+SYSTEM_PROMPT = """You are a NestJS architect. Generate a concise backend architecture blueprint.
 
-DO NOT generate actual code. Instead, provide a detailed architecture documentation that includes:
+Focus on:
+1. **Modules**: One module per main entity (PascalCase: UserModule, ProductModule)
+2. **Key Endpoints**: List the 8-10 most important API endpoints with HTTP methods
+3. **Security**: Essential guards (JwtAuthGuard, RolesGuard, etc.)
+4. **Environment**: Required environment variables
+5. **Event-Driven Architecture**: 
+   - Analyze if events are needed for: real-time updates, async processing, notifications, webhooks
+   - If yes: define key events (e.g., user.created, location.updated) and which modules emit/consume them
+   - Suggest message queue (RabbitMQ, Redis, AWS SQS) if events are used
 
-## ARCHITECTURE COMPONENTS
-
-1. **Modules**: Group related functionality into cohesive modules
-   - Each module should manage specific entities
-   - Define clear module boundaries and dependencies
-   - Follow domain-driven design principles
-
-2. **Endpoints**: Define all REST API endpoints
-   - Use RESTful conventions (GET, POST, PUT, PATCH, DELETE)
-   - Include path parameters and query parameters
-   - Specify authentication and authorization requirements
-   - Document request/response structures
-
-3. **Data Flows**: Show how requests flow through the system
-   - Controller → Service → Repository → Database
-   - Include validation, transformation, and error handling steps
-   - Show where guards and interceptors are applied
-
-4. **Security**: Define authentication and authorization
-   - Guards for protecting routes
-   - Role-based access control
-   - JWT or other auth mechanisms
-
-5. **Cross-cutting Concerns**:
-   - Interceptors for logging, caching, response transformation
-   - Pipes for validation and data transformation
-   - Middlewares for request preprocessing
-
-## NAMING CONVENTIONS
-
-- **Modules**: PascalCase (e.g., UserModule, VehicleModule)
-- **Endpoints**: kebab-case paths (e.g., /api/users, /api/fuel-logs)
-- **Guards**: PascalCase + Guard (e.g., JwtAuthGuard, RolesGuard)
-
-## BEST PRACTICES
-
-- Group CRUD operations per entity
-- Add business-specific endpoints beyond basic CRUD
-- Consider pagination for list endpoints
-- Include filtering and sorting capabilities
-- Define proper HTTP status codes
-- Plan for error handling
-
-Generate a complete architecture blueprint that a development team can use to implement the NestJS backend."""
+Keep it simple and practical. The team will expand details during implementation."""
 
 
 # ============================================================
 # DIAGRAM GENERATORS
 # ============================================================
 
-def generate_module_diagram(modules: List[ModuleSchema]) -> str:
-    """Generate a Mermaid diagram showing module dependencies."""
+def generate_module_diagram(modules: List[SimpleModule]) -> str:
+    """Generate a simple Mermaid diagram showing module structure."""
     lines = ["graph TD"]
-    lines.append("    subgraph Application")
-    lines.append("        AppModule[AppModule]")
+    lines.append("    AppModule[AppModule]")
     
     for module in modules:
         module_id = module.name.replace(" ", "")
-        lines.append(f"        {module_id}[{module.name}Module]")
-        lines.append(f"        AppModule --> {module_id}")
-    
-    lines.append("    end")
-    lines.append("")
-    
-    # Add dependencies
-    for module in modules:
-        module_id = module.name.replace(" ", "")
-        for dep in module.dependencies:
-            dep_id = dep.replace(" ", "").replace("Module", "")
-            lines.append(f"    {module_id} -.-> {dep_id}")
+        entities = ", ".join(module.entities)
+        lines.append(f"    {module_id}[{module.name}Module<br/>{entities}]")
+        lines.append(f"    AppModule --> {module_id}")
     
     return "\n".join(lines)
 
 
-def generate_request_flow_diagram(flow: DataFlow) -> str:
-    """Generate a Mermaid sequence diagram for a data flow."""
-    lines = ["sequenceDiagram"]
-    lines.append("    participant Client")
+def generate_request_flow_diagram() -> str:
+    """Generate a generic Mermaid sequence diagram showing typical request flow."""
+    return """sequenceDiagram
+    participant Client
+    participant Controller
+    participant Guard
+    participant Service
+    participant Repository
+    participant Database
     
-    # Extract unique components
-    components = []
-    for step in flow.steps:
-        if step.component not in components:
-            components.append(step.component)
+    Client->>+Controller: HTTP Request
+    Controller->>+Guard: Validate Auth
+    Guard-->>-Controller: Authorized
+    Controller->>+Service: Business Logic
+    Service->>+Repository: Query Data
+    Repository->>+Database: SQL Query
+    Database-->>-Repository: Result Set
+    Repository-->>-Service: Entity Data
+    Service-->>-Controller: Response DTO
+    Controller-->>-Client: HTTP Response"""
+
+
+def generate_endpoint_table(endpoints: List[SimpleEndpoint]) -> str:
+    """Generate a markdown table of key endpoints."""
+    lines = ["| Method | Endpoint | Description |"]
+    lines.append("|--------|----------|-------------|")
     
-    for comp in components:
-        lines.append(f"    participant {comp}")
-    
-    lines.append(f"    Note over Client: {flow.trigger}")
-    
-    prev_comp = "Client"
-    for step in flow.steps:
-        lines.append(f"    {prev_comp}->>+{step.component}: {step.action}")
-        prev_comp = step.component
-    
-    # Return flow
-    for comp in reversed(components):
-        if comp != components[-1]:
-            lines.append(f"    {comp}-->>-{prev_comp}: Response")
-            prev_comp = comp
-    
-    lines.append(f"    {components[0]}-->>-Client: HTTP Response")
+    for ep in endpoints:
+        lines.append(f"| {ep.method} | `{ep.path}` | {ep.description} |")
     
     return "\n".join(lines)
 
 
-def generate_endpoint_table(modules: List[ModuleSchema]) -> str:
-    """Generate a markdown table of all endpoints."""
-    lines = ["| Method | Endpoint | Description | Auth | Roles |"]
-    lines.append("|--------|----------|-------------|------|-------|")
-    
-    for module in modules:
-        for ep in module.endpoints:
-            roles = ", ".join(ep.roles) if ep.roles else "-"
-            auth = "✓" if ep.auth_required else "✗"
-            lines.append(f"| {ep.method} | `{ep.path}` | {ep.description} | {auth} | {roles} |")
-    
-    return "\n".join(lines)
-
-
-def generate_directory_structure(modules: List[ModuleSchema]) -> str:
+def generate_directory_structure(modules: List[SimpleModule]) -> str:
     """Generate the recommended directory structure."""
     lines = [
         "src/",
@@ -215,40 +125,25 @@ def generate_directory_structure(modules: List[ModuleSchema]) -> str:
         "├── main.ts",
         "├── common/",
         "│   ├── guards/",
-        "│   │   ├── jwt-auth.guard.ts",
-        "│   │   └── roles.guard.ts",
         "│   ├── interceptors/",
-        "│   │   ├── logging.interceptor.ts",
-        "│   │   └── transform.interceptor.ts",
         "│   ├── pipes/",
-        "│   │   └── validation.pipe.ts",
-        "│   ├── decorators/",
-        "│   │   └── roles.decorator.ts",
-        "│   └── filters/",
-        "│       └── http-exception.filter.ts",
+        "│   └── decorators/",
         "├── config/",
-        "│   └── configuration.ts",
     ]
     
-    for module in modules:
+    for i, module in enumerate(modules):
         module_path = to_kebab_case(module.name)
-        entity_name = module.entities[0] if module.entities else module.name
-        entity_path = to_kebab_case(entity_name)
+        is_last = i == len(modules) - 1
+        prefix = "└──" if is_last else "├──"
         
         lines.extend([
-            f"├── {module_path}/",
+            f"{prefix} {module_path}/",
             f"│   ├── {module_path}.module.ts",
             f"│   ├── {module_path}.controller.ts",
             f"│   ├── {module_path}.service.ts",
             f"│   ├── entities/",
-            f"│   │   └── {entity_path}.entity.ts",
             f"│   └── dto/",
-            f"│       ├── create-{entity_path}.dto.ts",
-            f"│       └── update-{entity_path}.dto.ts",
         ])
-    
-    lines.append("└── database/")
-    lines.append("    └── database.module.ts")
     
     return "\n".join(lines)
 
@@ -268,33 +163,29 @@ def to_kebab_case(name: str) -> str:
 # ============================================================
 
 def convert_to_architecture(schema: NestJSArchitectureSchema) -> dict:
-    """Convert Pydantic schema to architecture dictionary."""
+    """Convert simplified Pydantic schema to architecture dictionary."""
     
     # Generate diagrams
     module_diagram = generate_module_diagram(schema.modules)
-    
-    flow_diagrams = {}
-    for flow in schema.data_flows:
-        flow_diagrams[flow.name] = generate_request_flow_diagram(flow)
-    
-    endpoint_table = generate_endpoint_table(schema.modules)
+    flow_diagram = generate_request_flow_diagram()
+    endpoint_table = generate_endpoint_table(schema.key_endpoints)
     directory_structure = generate_directory_structure(schema.modules)
     
     # Convert modules
     modules = [
         {
             "name": m.name,
-            "description": m.description,
+            "description": f"Manages {', '.join(m.entities)}",
             "entities": m.entities,
             "has_controller": True,
             "has_service": True,
             "has_repository": True,
-            "dependencies": m.dependencies,
+            "dependencies": [],
         }
         for m in schema.modules
     ]
     
-    # Convert entities (simplified - just names from modules)
+    # Convert entities
     entities = []
     for module in schema.modules:
         for entity in module.entities:
@@ -306,16 +197,27 @@ def convert_to_architecture(schema: NestJSArchitectureSchema) -> dict:
             })
     
     # Convert endpoints
-    endpoints = []
-    for module in schema.modules:
-        for ep in module.endpoints:
-            endpoints.append({
-                "method": ep.method,
-                "path": ep.path,
-                "description": ep.description,
-                "request_dto": ep.request_body,
-                "response_dto": ep.response,
-            })
+    endpoints = [
+        {
+            "method": ep.method,
+            "path": ep.path,
+            "description": ep.description,
+            "request_dto": None,
+            "response_dto": None,
+        }
+        for ep in schema.key_endpoints
+    ]
+    
+    # Convert event patterns
+    event_patterns = [
+        {
+            "event_name": ep.event_name,
+            "trigger": ep.trigger,
+            "consumers": ep.consumers,
+            "purpose": ep.purpose
+        }
+        for ep in schema.event_patterns
+    ]
     
     return {
         "project_name": schema.project_name,
@@ -324,20 +226,25 @@ def convert_to_architecture(schema: NestJSArchitectureSchema) -> dict:
         "entities": entities,
         "endpoints": endpoints,
         "shared_dtos": [],
-        "guards": [g.name for g in schema.guards],
-        "interceptors": [i.name for i in schema.interceptors],
+        "guards": schema.security_guards,
+        "interceptors": ["LoggingInterceptor", "TransformInterceptor"],
         "directory_structure": directory_structure,
         "module_diagram": module_diagram,
-        "flow_diagrams": flow_diagrams,
+        "flow_diagrams": {"Generic Request Flow": flow_diagram},
         "endpoint_table": endpoint_table,
-        "guards_detail": [{"name": g.name, "purpose": g.purpose, "applies_to": g.applies_to} for g in schema.guards],
-        "interceptors_detail": [{"name": i.name, "purpose": i.purpose, "applies_to": i.applies_to} for i in schema.interceptors],
-        "pipes": [{"name": p.name, "purpose": p.purpose} for p in schema.pipes],
-        "middlewares": [{"name": m.name, "purpose": m.purpose, "routes": m.routes} for m in schema.middlewares],
-        "data_flows": [{"name": f.name, "trigger": f.trigger, "steps": [{"step": s.step, "component": s.component, "action": s.action} for s in f.steps]} for f in schema.data_flows],
+        "guards_detail": [{"name": g, "purpose": "Authentication/Authorization", "applies_to": ["All protected routes"]} for g in schema.security_guards],
+        "interceptors_detail": [
+            {"name": "LoggingInterceptor", "purpose": "Request/Response logging", "applies_to": ["Global"]},
+            {"name": "TransformInterceptor", "purpose": "Response transformation", "applies_to": ["Global"]}
+        ],
+        "pipes": [{"name": "ValidationPipe", "purpose": "DTO validation"}],
+        "middlewares": [{"name": "LoggerMiddleware", "purpose": "HTTP request logging", "routes": ["*"]}],
+        "data_flows": [],
         "environment_variables": schema.environment_variables,
-        "external_integrations": schema.external_integrations,
-        "code_samples": {},  # Empty - no code generation
+        "external_integrations": [],
+        "code_samples": {},
+        "event_patterns": event_patterns,
+        "message_queue": schema.message_queue,
     }
 
 
@@ -357,7 +264,7 @@ def nestjs_generator(state: GraphState) -> GraphState:
         fail_task(state, "generate_nestjs", "No tables found in schema")
         return state
     
-    llm = get_llm()
+    llm = get_llm()  # Reduced tokens for simplified output
     structured_llm = llm.with_structured_output(NestJSArchitectureSchema)
     
     # Build context from schema
@@ -365,7 +272,7 @@ def nestjs_generator(state: GraphState) -> GraphState:
     
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=f"""Generate a NestJS backend architecture blueprint for the following database schema and business requirements.
+        HumanMessage(content=f"""Generate a concise NestJS architecture blueprint.
 
 ## Business Requirements
 {requirements}
@@ -373,14 +280,14 @@ def nestjs_generator(state: GraphState) -> GraphState:
 ## Database Schema
 {context}
 
-Generate a comprehensive architecture documentation including:
-1. Module structure with clear boundaries
-2. All REST API endpoints with authentication requirements
-3. Key data flow examples showing request lifecycle
-4. Security guards and interceptors
-5. Required environment variables and external integrations
+Generate:
+1. Modules (one per main entity/domain)
+2. API endpoints with a short description
+3. Essential security guards
+4. Required environment variables
+5. Is event driven architecture needed ? If yes, how to implement it for the given schema?
 
-Focus on architecture design, NOT code implementation.""")
+Keep it brief and actionable.""")
     ]
     
     try:

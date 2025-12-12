@@ -32,7 +32,7 @@ class ColumnSchema(BaseModel):
 
 class TableSchema(BaseModel):
     name: str
-    description: str
+    description: str = Field(default="", max_length=50, description="Max 5 words describing table purpose")
     columns: List[ColumnSchema]
     indexes: List[IndexSchema] = []
     constraints: List[str] = []  # Table-level CHECK constraints
@@ -41,51 +41,68 @@ class TableSchema(BaseModel):
 
 class RefinedSchema(BaseModel):
     tables: List[TableSchema]
-    changes_made: List[str]
+    changes_made: List[str] = Field(description="List of changes (max 10 words each)")
 
 
-REFINER_PROMPT = """Apply critic feedback to create a production-optimized schema.
+REFINER_PROMPT = """Apply critic feedback to optimize the schema. You will receive:
+1. Current database schema
+2. Critic feedback with specific issues and recommendations
+3. Feedback items marked with applied: true/false
 
-## Column Definitions
-CRITICAL: Every column MUST have both 'name' and 'data_type' fields defined.
-NEVER create a column entry with only a constraint - use the table's 'constraints' array instead.
+YOUR TASK: For each feedback item where applied=true, implement the EXACT change recommended.
 
-## Priority Order
-1. CRITICAL issues (must fix)
-2. Performance issues (indexes, types)
-3. Security issues (PII, RLS, constraints)
-4. WARNING issues
-5. SUGGESTIONS
+## CRITICAL FIXES (Must implement exactly as described)
 
-## Performance Fixes
-- Add index for EVERY FK column: idx_{table}_{column}
-- Add indexes for columns in WHERE/ORDER BY (status, created_at, email)
-- Use composite indexes for common patterns (user_id + created_at)
-- Use TIMESTAMPTZ instead of TIMESTAMP
-- Use appropriate VARCHAR lengths
+### Missing Indexes on Foreign Keys:
+- Find EVERY column with references_table defined
+- Add index entry to table's indexes array: {"name": "idx_{table}_{column}", "columns": ["{column}"], "unique": false, "type": "btree"}
+- Verify: Every FK column has a corresponding index
 
-## Security Fixes
-- Mark PII columns (is_pii=true): email, phone, address, name, ssn, ip_address
-- Enable RLS (enable_rls=true) for multi-tenant or user-data tables
+### Missing Audit Columns:
+- Check EVERY table for created_at, updated_at, deleted_at
+- Add missing columns with correct types: TIMESTAMPTZ NOT NULL DEFAULT NOW() (or NULL for deleted_at)
+- Verify: All tables have created_at and updated_at
+
+### Unprotected PII:
+- Find ALL columns: email, phone, address, name, first_name, last_name, ssn, birth_date
+- Set is_pii: true on these columns
+- Verify: All PII columns marked
+
+### Missing UNIQUE Constraints:
+- Add unique: true on natural keys (email, license_plate, slug, etc.)
+- Verify: Natural keys have unique constraint
+
+### Wrong Data Types:
+- TIMESTAMP → TIMESTAMPTZ
+- FLOAT/REAL → DECIMAL(p,s) for money
+- TEXT → VARCHAR(n) for bounded strings
+- Verify: All types are optimal
+
+## PERFORMANCE FIXES
+- Add composite indexes for common query patterns (user_id + created_at)
+- Add indexes on WHERE/ORDER BY columns (status, type, email)
+
+## SECURITY FIXES
+- Enable RLS (enable_rls=true) for multi-tenant/user-data tables
 - Add CHECK constraints for status/enum columns
-- Specify ON DELETE action for all FKs (CASCADE, RESTRICT, SET NULL)
+- Set ON DELETE actions for all FKs (CASCADE/RESTRICT/SET NULL)
 
-## Constraints
-- Column-level constraints: use check_constraint field on the column (e.g., "age > 0")
-- Table-level constraints: use the table's constraints array (e.g., "end_date >= start_date")
-- NEVER add a column entry that only contains a constraint without name/data_type
+## VERIFICATION CHECKLIST (Complete before returning)
+Before returning the schema, verify:
+□ Every foreign key column has a corresponding index in indexes array
+□ Every table has created_at, updated_at, and deleted_at columns
+□ All PII columns (email, phone, address, name, etc.) have is_pii: true
+□ All natural keys have unique: true
+□ Status/enum columns have CHECK constraints
+□ All timestamps use TIMESTAMPTZ (not TIMESTAMP)
+□ All monetary values use DECIMAL (not FLOAT)
 
-## Integrity Fixes
-- Add NOT NULL on required fields
-- Add UNIQUE on natural keys
-- Add missing standard columns (id, created_at, updated_at)
-- Fix FK types to match referenced PK
-
-## Rules
-- Return COMPLETE schema with ALL tables
-- Preserve working relationships
-- List each change with clear description
-- Do NOT remove tables/columns unless explicitly requested"""
+## OUTPUT RULES
+- Return COMPLETE schema with ALL tables and ALL columns
+- Every column needs 'name' and 'data_type'
+- Table descriptions: MAX 5 WORDS
+- In changes_made, list SPECIFIC changes (e.g., "Added idx_vehicles_company_id index", NOT "Improved indexing")
+- List 1 change per line, max 10 words each"""
 
 
 def convert_to_dict(schema: RefinedSchema) -> tuple:
@@ -151,7 +168,7 @@ def schema_refiner(state: GraphState) -> GraphState:
         complete_task(state, "refine_schema", "No pending feedback")
         return state
     
-    llm = get_llm()
+    llm = get_llm(max_tokens=6000)  # Increased for complete schema with all fixes applied
     structured_llm = llm.with_structured_output(RefinedSchema)
     
     context = ContextBuilder.for_refiner(state)

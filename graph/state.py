@@ -1,6 +1,7 @@
 # graph/state.py
-from typing import TypedDict, List, Optional, Dict, Any
+from typing import TypedDict, List, Optional, Dict, Any, Annotated
 from enum import Enum
+from operator import add
 
 
 # ============================================================
@@ -114,6 +115,53 @@ class ClarifyingQuestion(TypedDict):
     question: str
     context: str
     options: Optional[List[str]]
+
+
+# ============================================================
+# CUSTOM REDUCERS FOR STATE MERGING
+# ============================================================
+
+def merge_working_state(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Custom reducer for merging working state updates.
+    This allows multiple nodes to update working state concurrently.
+    """
+    if not left:
+        return right
+    if not right:
+        return left
+    
+    # Create a copy of left state
+    merged = left.copy()
+    
+    # Merge right into merged
+    for key, value in right.items():
+        if value is not None:  # Only update if value is not None
+            merged[key] = value
+    
+    return merged
+
+
+def merge_archive_state(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Custom reducer for merging archive state updates.
+    This allows multiple nodes to update archive state concurrently.
+    Each node typically updates different keys (e.g., ddl_script, erd_diagram, nestjs_architecture).
+    """
+    if not left:
+        return right
+    if not right:
+        return left
+    
+    # Create a copy of left state
+    merged = left.copy()
+    
+    # Merge right into merged
+    for key, value in right.items():
+        if value is not None:  # Only update if value is not None
+            merged[key] = value
+    
+    return merged
 
 
 # ============================================================
@@ -238,9 +286,10 @@ class ArchiveState(TypedDict):
 
 
 # ============================================================
-# COMBINED STATE
+# COMBINED STATE WITH ANNOTATED REDUCER
 # ============================================================
 
 class GraphState(TypedDict):
-    working: WorkingState
-    archive: ArchiveState
+    # Use Annotated with custom reducers to handle concurrent updates
+    working: Annotated[WorkingState, merge_working_state]
+    archive: Annotated[ArchiveState, merge_archive_state]
