@@ -102,6 +102,10 @@ class SQLDialectGenerator:
             if col.get("references"):
                 col_defs.append(self.generate_fk_constraint(table["name"], col))
         
+        # Table-level constraints
+        for constraint in table.get("constraints", []):
+            col_defs.append(f"    CONSTRAINT chk_{table['name']}_{len(col_defs)} CHECK ({constraint})")
+        
         lines.append(",\n".join(col_defs))
         lines.append(");")
         

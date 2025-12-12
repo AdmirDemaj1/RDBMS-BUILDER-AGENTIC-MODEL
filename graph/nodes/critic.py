@@ -17,65 +17,63 @@ class FeedbackItem(BaseModel):
 
 
 class CriticEvaluation(BaseModel):
-    overall_score: int = Field(ge=1, le=10)
+    overall_score: int = Field(ge=1, le=10, description="1-10 score, give credit for improvements")
     feedback_items: List[FeedbackItem]
     summary: str
     requires_revision: bool
+    improvements_from_previous: List[str] = Field(default=[], description="What got better since last evaluation")
 
 
-CRITIC_PROMPT = """Evaluate schema for PRODUCTION READINESS (1-10).
+CRITIC_PROMPT = """You are a senior database architect evaluating database schemas. Your goal is to provide 
+constructive feedback that guides improvement while acknowledging what's already done well.
 
-## PERFORMANCE EVALUATION (30%)
-Critical checks:
-- Every FK column MUST have an index (missing = critical)
-- Columns in WHERE/ORDER BY should have indexes
+## SCORING GUIDELINES (CRITICAL - Read Carefully):
+- **1-3**: Fundamentally broken, missing core requirements (no PKs, no FKs, no indexes)
+- **4-5**: Has critical production blockers (missing FK indexes, no audit trail, security issues)
+- **6-7**: Production-ready but has optimization opportunities
+- **8-9**: Well-designed with only minor suggestions
+- **10**: Exemplary design following all best practices
+
+## EVALUATION CRITERIA
+
+### 1. Data Integrity (Critical):
+- Primary keys on all tables
+- Foreign key constraints properly defined
+- Unique constraints on natural keys (email, license_plate, etc.)
+- Appropriate nullability settings
+
+### 2. Performance (Critical):
+- Indexes on **ALL** foreign key columns (missing FK index = automatic CRITICAL)
 - Composite indexes for common query patterns
-- No missing indexes on high-cardinality columns (user_id, order_id)
-- TIMESTAMPTZ used instead of TIMESTAMP
-- UUID vs BIGSERIAL choice appropriate for scale
+- Appropriate data types for scale
 
-Warning signs:
-- Tables without any indexes (except PK)
-- Over-indexing (>5 indexes per table without justification)
-- Missing partial indexes for status-filtered queries
+### 3. Audit & Compliance (Important):
+- created_at and updated_at on all tables
+- Soft delete capability (deleted_at) where needed
+- PII identified and marked
 
-## SECURITY EVALUATION (25%)
-Critical checks:
-- PII columns identified (email, phone, address, ssn, ip_address)
-- Multi-tenant tables should enable Row Level Security
-- Sensitive data columns flagged for encryption consideration
+### 4. Security (Important):
+- PII protection strategy (RLS, encryption markers)
+- Multi-tenant isolation (RLS on tenant tables)
 
-Warning signs:
-- Missing CHECK constraints on status/enum columns
-- No ON DELETE action specified for FKs
-- Cascading deletes on sensitive data without audit
+### 5. Best Practices (Nice to have):
+- Timezone-aware timestamps (TIMESTAMPTZ)
+- Decimal for financial data
+- Check constraints on enums
 
-## DATA INTEGRITY (25%)
-Critical checks:
-- All tables have id (UUID/BIGSERIAL), created_at, updated_at
-- FKs properly reference existing tables
-- NOT NULL on required business fields
-- UNIQUE on natural keys (email, username, sku)
+## IMPORTANT - When Evaluating a Refined Schema:
+- **Compare it to the previous version** if this is iteration 2+
+- **Give credit for improvements made** - if indexes were added, acknowledge it
+- **Adjust score UPWARD** if critical issues were fixed (e.g., 4→7 if all FK indexes added)
+- **Focus new feedback on remaining issues only** - don't repeat already-fixed issues
+- **If all critical issues are resolved, score should be 6+**
+- **List improvements_from_previous** to show what got better
 
-Warning signs:
-- Missing soft delete (deleted_at) on important entities
-- No version column for optimistic locking on concurrent-update tables
-- Nullable FKs that should be required
+## Revision Logic:
+- Set requires_revision=true ONLY if: score < 7 OR critical issues remain
+- If score ≥ 7 and only warnings/suggestions remain: requires_revision=false
 
-## DESIGN QUALITY (20%)
-Check:
-- 3NF normalization (no redundancy)
-- Naming: plural tables, singular columns, snake_case
-- Appropriate data types (DECIMAL for money, not FLOAT)
-- Junction tables for M:N with proper structure
-
-## SCORING
-- 9-10: Production-ready, optimized, secure
-- 7-8: Good, minor optimizations needed
-- 5-6: Functional but performance/security gaps
-- <5: Major issues, not production-safe
-
-Set requires_revision=true if: score<7, any critical issues, or missing indexes on FKs."""
+Format your response with specific, actionable feedback."""
 
 
 def critic(state: GraphState) -> GraphState:
@@ -122,8 +120,21 @@ def critic(state: GraphState) -> GraphState:
         critical = len([f for f in report["feedback_items"] if f["severity"] == "critical"])
         warnings = len([f for f in report["feedback_items"] if f["severity"] == "warning"])
         
+        # Check if this is a refinement iteration
+        critic_reports = state["archive"].get("critic_reports", [])
+        is_refinement = len(critic_reports) > 1
+        
         print(f"   Score: {result.overall_score}/10")
         print(f"   Issues: {critical} critical, {warnings} warnings")
+        
+        # Show improvements if this is a refinement iteration
+        if is_refinement and result.improvements_from_previous:
+            print(f"   ✨ Improvements recognized:")
+            for imp in result.improvements_from_previous[:3]:  # Show first 3
+                print(f"      - {imp}")
+            if len(result.improvements_from_previous) > 3:
+                print(f"      ... and {len(result.improvements_from_previous) - 3} more")
+        
         print(f"   Revision: {'Required' if result.requires_revision else 'Not needed'}")
         
         state["working"]["current_step"] = "critic_complete"

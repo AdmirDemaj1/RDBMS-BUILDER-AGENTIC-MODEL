@@ -1,6 +1,7 @@
 # graph/state.py
-from typing import TypedDict, List, Optional, Dict, Any
+from typing import TypedDict, List, Optional, Dict, Any, Annotated
 from enum import Enum
+from operator import add
 
 
 # ============================================================
@@ -117,6 +118,53 @@ class ClarifyingQuestion(TypedDict):
 
 
 # ============================================================
+# CUSTOM REDUCERS FOR STATE MERGING
+# ============================================================
+
+def merge_working_state(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Custom reducer for merging working state updates.
+    This allows multiple nodes to update working state concurrently.
+    """
+    if not left:
+        return right
+    if not right:
+        return left
+    
+    # Create a copy of left state
+    merged = left.copy()
+    
+    # Merge right into merged
+    for key, value in right.items():
+        if value is not None:  # Only update if value is not None
+            merged[key] = value
+    
+    return merged
+
+
+def merge_archive_state(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Custom reducer for merging archive state updates.
+    This allows multiple nodes to update archive state concurrently.
+    Each node typically updates different keys (e.g., ddl_script, erd_diagram, nestjs_architecture).
+    """
+    if not left:
+        return right
+    if not right:
+        return left
+    
+    # Create a copy of left state
+    merged = left.copy()
+    
+    # Merge right into merged
+    for key, value in right.items():
+        if value is not None:  # Only update if value is not None
+            merged[key] = value
+    
+    return merged
+
+
+# ============================================================
 # WORKING STATE (Hot Path)
 # ============================================================
 
@@ -124,6 +172,7 @@ class WorkingState(TypedDict):
     user_requirements: str
     sql_dialect: str
     enable_critic: bool
+    generate_nestjs: bool
     current_step: str
     current_task_id: Optional[str]
     task_summary: List[TaskSummary]
@@ -139,6 +188,83 @@ class WorkingState(TypedDict):
     needs_clarification: bool
     is_complete: bool
     error: Optional[str]
+    # Thread tracking for LangSmith
+    thread_id: Optional[str]
+
+
+# ============================================================
+# NESTJS ARCHITECTURE TYPES
+# ============================================================
+
+class NestJSModule(TypedDict):
+    name: str
+    entities: List[str]
+    has_controller: bool
+    has_service: bool
+    has_repository: bool
+    dependencies: List[str]
+
+
+class NestJSEntity(TypedDict):
+    name: str
+    table_name: str
+    columns: List[Dict[str, Any]]
+    relations: List[Dict[str, Any]]
+
+
+class NestJSEndpoint(TypedDict):
+    method: str  # GET, POST, PUT, PATCH, DELETE
+    path: str
+    description: str
+    request_dto: Optional[str]
+    response_dto: Optional[str]
+
+
+class NestJSDataFlowStep(TypedDict):
+    step: int
+    component: str
+    action: str
+
+
+class NestJSDataFlow(TypedDict):
+    name: str
+    trigger: str
+    steps: List[NestJSDataFlowStep]
+
+
+class NestJSGuardDetail(TypedDict):
+    name: str
+    purpose: str
+    applies_to: List[str]
+
+
+class NestJSInterceptorDetail(TypedDict):
+    name: str
+    purpose: str
+    applies_to: List[str]
+
+
+class NestJSArchitecture(TypedDict):
+    project_name: str
+    description: str
+    modules: List[NestJSModule]
+    entities: List[NestJSEntity]
+    endpoints: List[NestJSEndpoint]
+    shared_dtos: List[str]
+    guards: List[str]
+    interceptors: List[str]
+    directory_structure: str
+    module_diagram: str
+    flow_diagrams: Dict[str, str]
+    endpoint_table: str
+    guards_detail: List[NestJSGuardDetail]
+    interceptors_detail: List[NestJSInterceptorDetail]
+    pipes: List[Dict[str, str]]
+    middlewares: List[Dict[str, Any]]
+    data_flows: List[NestJSDataFlow]
+    environment_variables: List[str]
+    external_integrations: List[str]
+    code_samples: Dict[str, str]  # Empty - kept for compatibility
 
 
 # ============================================================
@@ -152,6 +278,7 @@ class ArchiveState(TypedDict):
     critic_reports: List[CriticReport]
     ddl_script: str
     erd_diagram: str
+    nestjs_architecture: Optional[NestJSArchitecture]
     started_at: Optional[str]
     completed_at: Optional[str]
     total_llm_calls: int
@@ -159,9 +286,10 @@ class ArchiveState(TypedDict):
 
 
 # ============================================================
-# COMBINED STATE
+# COMBINED STATE WITH ANNOTATED REDUCER
 # ============================================================
 
 class GraphState(TypedDict):
-    working: WorkingState
-    archive: ArchiveState
+    # Use Annotated with custom reducers to handle concurrent updates
+    working: Annotated[WorkingState, merge_working_state]
+    archive: Annotated[ArchiveState, merge_archive_state]

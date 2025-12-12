@@ -12,6 +12,11 @@ from .task_manager import (
     print_task_summary,
     get_default_tasks
 )
+from .thread_manager import (
+    ThreadManager,
+    create_thread_config,
+    get_or_create_thread_id
+)
 
 __all__ = [
     "get_llm",
@@ -24,5 +29,8 @@ __all__ = [
     "skip_task",
     "print_progress_bar",
     "print_task_summary",
-    "get_default_tasks"
+    "get_default_tasks",
+    "ThreadManager",
+    "create_thread_config",
+    "get_or_create_thread_id"
 ]

@@ -97,7 +97,7 @@ def print_task_summary(state: GraphState) -> None:
     print("=" * 50)
 
 
-def get_default_tasks(enable_critic: bool = True) -> List[Task]:
+def get_default_tasks(enable_critic: bool = True, generate_nestjs: bool = True) -> List[Task]:
     defs = [
         ("Analyze requirements", "clarify"),
         ("Extract entities", "extract_entities"),
@@ -116,5 +116,8 @@ def get_default_tasks(enable_critic: bool = True) -> List[Task]:
         ("Generate SQL DDL", "generate_sql"),
         ("Generate ERD", "generate_erd"),
     ])
+    
+    if generate_nestjs:
+        defs.append(("Generate NestJS architecture", "generate_nestjs"))
     
     return [create_task(content, node) for content, node in defs]

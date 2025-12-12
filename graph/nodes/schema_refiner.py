@@ -32,50 +32,77 @@ class ColumnSchema(BaseModel):
 
 class TableSchema(BaseModel):
     name: str
-    description: str
+    description: str = Field(default="", max_length=50, description="Max 5 words describing table purpose")
     columns: List[ColumnSchema]
     indexes: List[IndexSchema] = []
+    constraints: List[str] = []  # Table-level CHECK constraints
     enable_rls: bool = False
 
 
 class RefinedSchema(BaseModel):
     tables: List[TableSchema]
-    changes_made: List[str]
+    changes_made: List[str] = Field(description="List of changes (max 10 words each)")
 
 
-REFINER_PROMPT = """Apply critic feedback to create a production-optimized schema.
+REFINER_PROMPT = """Apply critic feedback to optimize the schema. You will receive:
+1. Current database schema
+2. Critic feedback with specific issues and recommendations
+3. Feedback items marked with applied: true/false
 
-## Priority Order
-1. CRITICAL issues (must fix)
-2. Performance issues (indexes, types)
-3. Security issues (PII, RLS, constraints)
-4. WARNING issues
-5. SUGGESTIONS
+YOUR TASK: For each feedback item where applied=true, implement the EXACT change recommended.
 
-## Performance Fixes
-- Add index for EVERY FK column: idx_{table}_{column}
-- Add indexes for columns in WHERE/ORDER BY (status, created_at, email)
-- Use composite indexes for common patterns (user_id + created_at)
-- Use TIMESTAMPTZ instead of TIMESTAMP
-- Use appropriate VARCHAR lengths
+## CRITICAL FIXES (Must implement exactly as described)
 
-## Security Fixes
-- Mark PII columns (is_pii=true): email, phone, address, name, ssn, ip_address
-- Enable RLS (enable_rls=true) for multi-tenant or user-data tables
+### Missing Indexes on Foreign Keys:
+- Find EVERY column with references_table defined
+- Add index entry to table's indexes array: {"name": "idx_{table}_{column}", "columns": ["{column}"], "unique": false, "type": "btree"}
+- Verify: Every FK column has a corresponding index
+
+### Missing Audit Columns:
+- Check EVERY table for created_at, updated_at, deleted_at
+- Add missing columns with correct types: TIMESTAMPTZ NOT NULL DEFAULT NOW() (or NULL for deleted_at)
+- Verify: All tables have created_at and updated_at
+
+### Unprotected PII:
+- Find ALL columns: email, phone, address, name, first_name, last_name, ssn, birth_date
+- Set is_pii: true on these columns
+- Verify: All PII columns marked
+
+### Missing UNIQUE Constraints:
+- Add unique: true on natural keys (email, license_plate, slug, etc.)
+- Verify: Natural keys have unique constraint
+
+### Wrong Data Types:
+- TIMESTAMP → TIMESTAMPTZ
+- FLOAT/REAL → DECIMAL(p,s) for money
+- TEXT → VARCHAR(n) for bounded strings
+- Verify: All types are optimal
+
+## PERFORMANCE FIXES
+- Add composite indexes for common query patterns (user_id + created_at)
+- Add indexes on WHERE/ORDER BY columns (status, type, email)
+
+## SECURITY FIXES
+- Enable RLS (enable_rls=true) for multi-tenant/user-data tables
 - Add CHECK constraints for status/enum columns
-- Specify ON DELETE action for all FKs (CASCADE, RESTRICT, SET NULL)
+- Set ON DELETE actions for all FKs (CASCADE/RESTRICT/SET NULL)
 
-## Integrity Fixes
-- Add NOT NULL on required fields
-- Add UNIQUE on natural keys
-- Add missing standard columns (id, created_at, updated_at)
-- Fix FK types to match referenced PK
+## VERIFICATION CHECKLIST (Complete before returning)
+Before returning the schema, verify:
+□ Every foreign key column has a corresponding index in indexes array
+□ Every table has created_at, updated_at, and deleted_at columns
+□ All PII columns (email, phone, address, name, etc.) have is_pii: true
+□ All natural keys have unique: true
+□ Status/enum columns have CHECK constraints
+□ All timestamps use TIMESTAMPTZ (not TIMESTAMP)
+□ All monetary values use DECIMAL (not FLOAT)
 
-## Rules
-- Return COMPLETE schema with ALL tables
-- Preserve working relationships
-- List each change with clear description
-- Do NOT remove tables/columns unless explicitly requested"""
+## OUTPUT RULES
+- Return COMPLETE schema with ALL tables and ALL columns
+- Every column needs 'name' and 'data_type'
+- Table descriptions: MAX 5 WORDS
+- In changes_made, list SPECIFIC changes (e.g., "Added idx_vehicles_company_id index", NOT "Improved indexing")
+- List 1 change per line, max 10 words each"""
 
 
 def convert_to_dict(schema: RefinedSchema) -> tuple:
@@ -117,7 +144,7 @@ def convert_to_dict(schema: RefinedSchema) -> tuple:
             "description": table.description,
             "columns": columns,
             "indexes": indexes,
-            "constraints": [],
+            "constraints": table.constraints,
             "row_level_security": table.enable_rls
         })
     
@@ -141,7 +168,7 @@ def schema_refiner(state: GraphState) -> GraphState:
         complete_task(state, "refine_schema", "No pending feedback")
         return state
     
-    llm = get_llm()
+    llm = get_llm(max_tokens=6000)  # Increased for complete schema with all fixes applied
     structured_llm = llm.with_structured_output(RefinedSchema)
     
     context = ContextBuilder.for_refiner(state)
@@ -170,7 +197,16 @@ def schema_refiner(state: GraphState) -> GraphState:
         complete_task(state, "refine_schema", f"Applied {len(changes)} improvements")
         
     except Exception as e:
-        fail_task(state, "refine_schema", str(e))
+        from pydantic import ValidationError
+        error_msg = str(e)
+        
+        # Provide more detailed error for validation issues
+        if isinstance(e, ValidationError):
+            error_msg = f"Schema validation failed: {e.error_count()} errors. "
+            error_msg += "LLM may have returned malformed column definitions. "
+            error_msg += "Check that all columns have 'name' and 'data_type' fields."
+        
+        fail_task(state, "refine_schema", error_msg)
         state["working"]["current_step"] = "refine_failed"
     
     return state
