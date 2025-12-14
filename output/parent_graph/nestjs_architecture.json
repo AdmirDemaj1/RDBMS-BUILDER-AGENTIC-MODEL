@@ -1,0 +1,392 @@
+{
+  "project_name": "CoffeeShopManagementSystem",
+  "description": "Multi-location coffee shop management system with POS, inventory, employees, suppliers, and loyalty program",
+  "modules": [
+    {
+      "name": "LocationModule",
+      "description": "Manages Location",
+      "entities": [
+        "Location"
+      ],
+      "has_controller": true,
+      "has_service": true,
+      "has_repository": true,
+      "dependencies": []
+    },
+    {
+      "name": "CustomerModule",
+      "description": "Manages Customer, LoyaltyAccount",
+      "entities": [
+        "Customer",
+        "LoyaltyAccount"
+      ],
+      "has_controller": true,
+      "has_service": true,
+      "has_repository": true,
+      "dependencies": []
+    },
+    {
+      "name": "EmployeeModule",
+      "description": "Manages Employee, Role, EmployeeLocation",
+      "entities": [
+        "Employee",
+        "Role",
+        "EmployeeLocation"
+      ],
+      "has_controller": true,
+      "has_service": true,
+      "has_repository": true,
+      "dependencies": []
+    },
+    {
+      "name": "ProductModule",
+      "description": "Manages Product, Category, ProductVariant",
+      "entities": [
+        "Product",
+        "Category",
+        "ProductVariant"
+      ],
+      "has_controller": true,
+      "has_service": true,
+      "has_repository": true,
+      "dependencies": []
+    },
+    {
+      "name": "InventoryModule",
+      "description": "Manages InventoryItem, LocationInventory",
+      "entities": [
+        "InventoryItem",
+        "LocationInventory"
+      ],
+      "has_controller": true,
+      "has_service": true,
+      "has_repository": true,
+      "dependencies": []
+    },
+    {
+      "name": "SupplierModule",
+      "description": "Manages Supplier, PurchaseOrder, PurchaseOrderItem",
+      "entities": [
+        "Supplier",
+        "PurchaseOrder",
+        "PurchaseOrderItem"
+      ],
+      "has_controller": true,
+      "has_service": true,
+      "has_repository": true,
+      "dependencies": []
+    },
+    {
+      "name": "SalesModule",
+      "description": "Manages Sale",
+      "entities": [
+        "Sale"
+      ],
+      "has_controller": true,
+      "has_service": true,
+      "has_repository": true,
+      "dependencies": []
+    },
+    {
+      "name": "AuthModule",
+      "description": "Manages User",
+      "entities": [
+        "User"
+      ],
+      "has_controller": true,
+      "has_service": true,
+      "has_repository": true,
+      "dependencies": []
+    }
+  ],
+  "entities": [
+    {
+      "name": "Location",
+      "table_name": "locations",
+      "columns": [],
+      "relations": []
+    },
+    {
+      "name": "Customer",
+      "table_name": "customers",
+      "columns": [],
+      "relations": []
+    },
+    {
+      "name": "LoyaltyAccount",
+      "table_name": "loyalty-accounts",
+      "columns": [],
+      "relations": []
+    },
+    {
+      "name": "Employee",
+      "table_name": "employees",
+      "columns": [],
+      "relations": []
+    },
+    {
+      "name": "Role",
+      "table_name": "roles",
+      "columns": [],
+      "relations": []
+    },
+    {
+      "name": "EmployeeLocation",
+      "table_name": "employee-locations",
+      "columns": [],
+      "relations": []
+    },
+    {
+      "name": "Product",
+      "table_name": "products",
+      "columns": [],
+      "relations": []
+    },
+    {
+      "name": "Category",
+      "table_name": "categorys",
+      "columns": [],
+      "relations": []
+    },
+    {
+      "name": "ProductVariant",
+      "table_name": "product-variants",
+      "columns": [],
+      "relations": []
+    },
+    {
+      "name": "InventoryItem",
+      "table_name": "inventory-items",
+      "columns": [],
+      "relations": []
+    },
+    {
+      "name": "LocationInventory",
+      "table_name": "location-inventorys",
+      "columns": [],
+      "relations": []
+    },
+    {
+      "name": "Supplier",
+      "table_name": "suppliers",
+      "columns": [],
+      "relations": []
+    },
+    {
+      "name": "PurchaseOrder",
+      "table_name": "purchase-orders",
+      "columns": [],
+      "relations": []
+    },
+    {
+      "name": "PurchaseOrderItem",
+      "table_name": "purchase-order-items",
+      "columns": [],
+      "relations": []
+    },
+    {
+      "name": "Sale",
+      "table_name": "sales",
+      "columns": [],
+      "relations": []
+    },
+    {
+      "name": "User",
+      "table_name": "users",
+      "columns": [],
+      "relations": []
+    }
+  ],
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/sales/pos",
+      "description": "Process POS transaction",
+      "request_dto": null,
+      "response_dto": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/locations/:id/inventory",
+      "description": "Get location inventory levels",
+      "request_dto": null,
+      "response_dto": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/purchase-orders",
+      "description": "Create supplier purchase order",
+      "request_dto": null,
+      "response_dto": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/customers/:id/loyalty",
+      "description": "Get customer loyalty points",
+      "request_dto": null,
+      "response_dto": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/sales/reports",
+      "description": "Generate sales reports",
+      "request_dto": null,
+      "response_dto": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "description": "Employee authentication",
+      "request_dto": null,
+      "response_dto": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/inventory/low-stock",
+      "description": "Get low stock alerts",
+      "request_dto": null,
+      "response_dto": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/customers",
+      "description": "Register new customer",
+      "request_dto": null,
+      "response_dto": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/locations/:id/employees",
+      "description": "Get location staff",
+      "request_dto": null,
+      "response_dto": null
+    },
+    {
+      "method": "PUT",
+      "path": "/api/products/:id",
+      "description": "Update product details",
+      "request_dto": null,
+      "response_dto": null
+    }
+  ],
+  "shared_dtos": [],
+  "guards": [
+    "JwtAuthGuard",
+    "RolesGuard",
+    "LocationAccessGuard"
+  ],
+  "interceptors": [
+    "LoggingInterceptor",
+    "TransformInterceptor"
+  ],
+  "directory_structure": "src/\n\u251c\u2500\u2500 app.module.ts\n\u251c\u2500\u2500 main.ts\n\u251c\u2500\u2500 common/\n\u2502   \u251c\u2500\u2500 guards/\n\u2502   \u251c\u2500\u2500 interceptors/\n\u2502   \u251c\u2500\u2500 pipes/\n\u2502   \u2514\u2500\u2500 decorators/\n\u251c\u2500\u2500 config/\n\u251c\u2500\u2500 location-module/\n\u2502   \u251c\u2500\u2500 location-module.module.ts\n\u2502   \u251c\u2500\u2500 location-module.controller.ts\n\u2502   \u251c\u2500\u2500 location-module.service.ts\n\u2502   \u251c\u2500\u2500 entities/\n\u2502   \u2514\u2500\u2500 dto/\n\u251c\u2500\u2500 customer-module/\n\u2502   \u251c\u2500\u2500 customer-module.module.ts\n\u2502   \u251c\u2500\u2500 customer-module.controller.ts\n\u2502   \u251c\u2500\u2500 customer-module.service.ts\n\u2502   \u251c\u2500\u2500 entities/\n\u2502   \u2514\u2500\u2500 dto/\n\u251c\u2500\u2500 employee-module/\n\u2502   \u251c\u2500\u2500 employee-module.module.ts\n\u2502   \u251c\u2500\u2500 employee-module.controller.ts\n\u2502   \u251c\u2500\u2500 employee-module.service.ts\n\u2502   \u251c\u2500\u2500 entities/\n\u2502   \u2514\u2500\u2500 dto/\n\u251c\u2500\u2500 product-module/\n\u2502   \u251c\u2500\u2500 product-module.module.ts\n\u2502   \u251c\u2500\u2500 product-module.controller.ts\n\u2502   \u251c\u2500\u2500 product-module.service.ts\n\u2502   \u251c\u2500\u2500 entities/\n\u2502   \u2514\u2500\u2500 dto/\n\u251c\u2500\u2500 inventory-module/\n\u2502   \u251c\u2500\u2500 inventory-module.module.ts\n\u2502   \u251c\u2500\u2500 inventory-module.controller.ts\n\u2502   \u251c\u2500\u2500 inventory-module.service.ts\n\u2502   \u251c\u2500\u2500 entities/\n\u2502   \u2514\u2500\u2500 dto/\n\u251c\u2500\u2500 supplier-module/\n\u2502   \u251c\u2500\u2500 supplier-module.module.ts\n\u2502   \u251c\u2500\u2500 supplier-module.controller.ts\n\u2502   \u251c\u2500\u2500 supplier-module.service.ts\n\u2502   \u251c\u2500\u2500 entities/\n\u2502   \u2514\u2500\u2500 dto/\n\u251c\u2500\u2500 sales-module/\n\u2502   \u251c\u2500\u2500 sales-module.module.ts\n\u2502   \u251c\u2500\u2500 sales-module.controller.ts\n\u2502   \u251c\u2500\u2500 sales-module.service.ts\n\u2502   \u251c\u2500\u2500 entities/\n\u2502   \u2514\u2500\u2500 dto/\n\u2514\u2500\u2500 auth-module/\n\u2502   \u251c\u2500\u2500 auth-module.module.ts\n\u2502   \u251c\u2500\u2500 auth-module.controller.ts\n\u2502   \u251c\u2500\u2500 auth-module.service.ts\n\u2502   \u251c\u2500\u2500 entities/\n\u2502   \u2514\u2500\u2500 dto/",
+  "module_diagram": "graph TD\n    AppModule[AppModule]\n    LocationModule[LocationModuleModule<br/>Location]\n    AppModule --> LocationModule\n    CustomerModule[CustomerModuleModule<br/>Customer, LoyaltyAccount]\n    AppModule --> CustomerModule\n    EmployeeModule[EmployeeModuleModule<br/>Employee, Role, EmployeeLocation]\n    AppModule --> EmployeeModule\n    ProductModule[ProductModuleModule<br/>Product, Category, ProductVariant]\n    AppModule --> ProductModule\n    InventoryModule[InventoryModuleModule<br/>InventoryItem, LocationInventory]\n    AppModule --> InventoryModule\n    SupplierModule[SupplierModuleModule<br/>Supplier, PurchaseOrder, PurchaseOrderItem]\n    AppModule --> SupplierModule\n    SalesModule[SalesModuleModule<br/>Sale]\n    AppModule --> SalesModule\n    AuthModule[AuthModuleModule<br/>User]\n    AppModule --> AuthModule",
+  "flow_diagrams": {
+    "Generic Request Flow": "sequenceDiagram\n    participant Client\n    participant Controller\n    participant Guard\n    participant Service\n    participant Repository\n    participant Database\n    \n    Client->>+Controller: HTTP Request\n    Controller->>+Guard: Validate Auth\n    Guard-->>-Controller: Authorized\n    Controller->>+Service: Business Logic\n    Service->>+Repository: Query Data\n    Repository->>+Database: SQL Query\n    Database-->>-Repository: Result Set\n    Repository-->>-Service: Entity Data\n    Service-->>-Controller: Response DTO\n    Controller-->>-Client: HTTP Response"
+  },
+  "endpoint_table": "| Method | Endpoint | Description |\n|--------|----------|-------------|\n| POST | `/api/sales/pos` | Process POS transaction |\n| GET | `/api/locations/:id/inventory` | Get location inventory levels |\n| POST | `/api/purchase-orders` | Create supplier purchase order |\n| GET | `/api/customers/:id/loyalty` | Get customer loyalty points |\n| GET | `/api/sales/reports` | Generate sales reports |\n| POST | `/api/auth/login` | Employee authentication |\n| GET | `/api/inventory/low-stock` | Get low stock alerts |\n| POST | `/api/customers` | Register new customer |\n| GET | `/api/locations/:id/employees` | Get location staff |\n| PUT | `/api/products/:id` | Update product details |",
+  "guards_detail": [
+    {
+      "name": "JwtAuthGuard",
+      "purpose": "Authentication/Authorization",
+      "applies_to": [
+        "All protected routes"
+      ]
+    },
+    {
+      "name": "RolesGuard",
+      "purpose": "Authentication/Authorization",
+      "applies_to": [
+        "All protected routes"
+      ]
+    },
+    {
+      "name": "LocationAccessGuard",
+      "purpose": "Authentication/Authorization",
+      "applies_to": [
+        "All protected routes"
+      ]
+    }
+  ],
+  "interceptors_detail": [
+    {
+      "name": "LoggingInterceptor",
+      "purpose": "Request/Response logging",
+      "applies_to": [
+        "Global"
+      ]
+    },
+    {
+      "name": "TransformInterceptor",
+      "purpose": "Response transformation",
+      "applies_to": [
+        "Global"
+      ]
+    }
+  ],
+  "pipes": [
+    {
+      "name": "ValidationPipe",
+      "purpose": "DTO validation"
+    }
+  ],
+  "middlewares": [
+    {
+      "name": "LoggerMiddleware",
+      "purpose": "HTTP request logging",
+      "routes": [
+        "*"
+      ]
+    }
+  ],
+  "data_flows": [],
+  "environment_variables": [
+    "DATABASE_URL",
+    "JWT_SECRET",
+    "JWT_EXPIRES_IN",
+    "REDIS_URL",
+    "SMTP_HOST",
+    "SMTP_USER",
+    "SMTP_PASS"
+  ],
+  "external_integrations": [],
+  "code_samples": {},
+  "event_patterns": [
+    {
+      "event_name": "sale.completed",
+      "trigger": "When POS transaction is successfully processed",
+      "consumers": [
+        "CustomerModule",
+        "InventoryModule"
+      ],
+      "purpose": "Update loyalty points and reduce stock"
+    },
+    {
+      "event_name": "inventory.low_stock",
+      "trigger": "When item stock falls below minimum threshold",
+      "consumers": [
+        "SupplierModule",
+        "NotificationModule"
+      ],
+      "purpose": "Trigger reorder alerts and notifications"
+    },
+    {
+      "event_name": "purchase_order.received",
+      "trigger": "When supplier delivery is marked as received",
+      "consumers": [
+        "InventoryModule"
+      ],
+      "purpose": "Update location inventory levels"
+    },
+    {
+      "event_name": "loyalty.points_earned",
+      "trigger": "When customer completes qualifying purchase",
+      "consumers": [
+        "CustomerModule",
+        "NotificationModule"
+      ],
+      "purpose": "Update points balance and send notifications"
+    }
+  ],
+  "message_queue": "Redis"
+}
