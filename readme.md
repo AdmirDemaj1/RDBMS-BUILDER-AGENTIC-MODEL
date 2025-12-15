@@ -210,6 +210,16 @@ references_table: Optional[str] = None
 
 ---
 
+## ✨ Features
+
+- 🤖 **AI-Powered Schema Generation** - Automatic database schema design from natural language
+- 🔍 **Intelligent Critic System** - Built-in schema review and refinement
+- 💾 **Long-Term Memory (NEW!)** - LangGraph checkpointing for persistent state across sessions
+- 🚀 **NestJS Backend Generation** - Automatic API architecture and documentation
+- 🧵 **Thread-Based Sessions** - Multi-session conversations with context preservation
+- 📊 **ERD Generation** - Automatic entity-relationship diagrams
+- 🗄️ **Multi-Dialect Support** - PostgreSQL, MySQL, SQLite
+
 ## 🚀 Getting Started
 
 ```bash
@@ -222,7 +232,11 @@ python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
-pip install -r requirements.txt
+pip install -e .
+
+# Set up environment (optional)
+cp .env.example .env
+# Edit .env with your API keys and configuration
 
 # Run the application
 python main.py
@@ -230,20 +244,69 @@ python main.py
 
 ---
 
+## 💾 Long-Term Memory (Checkpointing)
+
+The RDBMS Builder now supports **LangGraph checkpointing** for long-term memory persistence!
+
+### Key Benefits
+
+- **Session Memory** - State persists across multiple runs
+- **Error Recovery** - Automatic fault tolerance and resume capability
+- **Multi-Session Workflows** - Build complex schemas over time
+- **Time Travel** - Inspect and replay past executions
+
+### Quick Start
+
+```python
+from main import run_builder
+from utils.checkpoint_manager import CheckpointerType
+
+# Run with checkpointing enabled
+result = run_builder(
+    requirements="Build a blog system...",
+    enable_checkpointing=True,
+    checkpoint_type=CheckpointerType.SQLITE,  # or POSTGRES
+    thread_id="my-project-v1"
+)
+
+# Later, resume from the same thread
+result = run_builder(
+    requirements="Add comments feature...",
+    thread_id="my-project-v1",  # Same thread ID!
+    enable_checkpointing=True
+)
+```
+
+### Supported Backends
+
+- **SQLite** - File-based persistence (development)
+- **PostgreSQL** - Database persistence (production)
+- **Memory** - In-memory only (testing)
+
+📖 **Full Documentation**: [CHECKPOINTING.md](CHECKPOINTING.md)
+
 ## 📁 Project Structure
 
 ```
 rdbms-builder/
-├── main.py                 # Entry point
+├── main.py                          # Entry point
+├── CHECKPOINTING.md                 # Checkpointing documentation
 ├── graph/
-│   ├── builder.py          # LangGraph workflow builder
-│   ├── state.py            # State definitions
+│   ├── builder.py                   # LangGraph workflow builder
+│   ├── state.py                     # State definitions
 │   └── nodes/
 │       ├── entity_extractor.py
 │       ├── relationship_analyzer.py
 │       ├── schema_designer.py
 │       ├── sql_generator.py
 │       └── validator.py
-└── utils/
-    └── llm.py              # LLM configuration
+├── utils/
+│   ├── llm.py                       # LLM configuration
+│   ├── checkpoint_manager.py        # Checkpointing utilities
+│   ├── state_manager.py             # State management
+│   └── thread_manager.py            # Thread tracking
+├── examples/
+│   └── checkpointing_demo.py        # Checkpointing examples
+└── data/
+    └── checkpoints.db               # SQLite checkpoint storage
 ```

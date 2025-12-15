@@ -1,9 +1,14 @@
 # main.py
-from graph.builder import graph, graph_continue
-from graph.state import GraphState, TaskStatus
-from utils.state_manager import StateManager
-from utils.task_manager import print_task_summary
-from utils.thread_manager import ThreadManager, create_thread_config, get_or_create_thread_id
+from builder.graph.builder import graph, graph_continue, get_compiled_graphs
+from builder.graph.state import GraphState, TaskStatus
+from builder.utils.state_manager import StateManager
+from builder.utils.task_manager import print_task_summary
+from builder.utils.thread_manager import ThreadManager, create_thread_config, get_or_create_thread_id
+from builder.utils.checkpoint_manager import (
+    CheckpointManager,
+    CheckpointerType,
+    create_checkpoint_manager_from_env
+)
 import os
 from typing import Optional
 
@@ -367,35 +372,164 @@ def list_recent_threads(project_name: Optional[str] = None, limit: int = 10) -> 
         print(f"Error fetching threads: {e}")
 
 
+def list_checkpoints(
+    thread_id: str,
+    checkpoint_type: CheckpointerType = CheckpointerType.SQLITE,
+    connection_string: Optional[str] = None,
+    limit: int = 10
+) -> None:
+    """
+    List checkpoints for a specific thread.
+    
+    Args:
+        thread_id: The thread ID to query.
+        checkpoint_type: Type of checkpointer (memory, sqlite, postgres).
+        connection_string: Optional connection string for the checkpointer.
+        limit: Maximum number of checkpoints to display.
+    """
+    print("\n" + "=" * 60)
+    print(f"💾 CHECKPOINTS FOR THREAD: {thread_id[:8]}...")
+    print("=" * 60)
+    
+    try:
+        checkpoint_manager = CheckpointManager(
+            checkpointer_type=checkpoint_type,
+            connection_string=connection_string
+        )
+        
+        checkpoints = checkpoint_manager.list_checkpoints(thread_id, limit=limit)
+        
+        if not checkpoints:
+            print("No checkpoints found for this thread.")
+            return
+        
+        for i, cp in enumerate(checkpoints, 1):
+            print(f"\n{i}. Checkpoint ID: {cp.get('checkpoint_id', 'N/A')[:8]}...")
+            if cp.get('parent_checkpoint_id'):
+                print(f"   Parent: {cp['parent_checkpoint_id'][:8]}...")
+            if cp.get('created_at'):
+                print(f"   Created: {cp['created_at']}")
+            if cp.get('metadata'):
+                print(f"   Metadata: {cp['metadata']}")
+        
+        print("\n" + "=" * 60)
+    except Exception as e:
+        print(f"Error fetching checkpoints: {e}")
+
+
+def resume_from_checkpoint(
+    thread_id: str,
+    checkpoint_id: Optional[str] = None,
+    checkpoint_type: CheckpointerType = CheckpointerType.SQLITE,
+    connection_string: Optional[str] = None,
+    project_name: Optional[str] = None
+) -> Optional[GraphState]:
+    """
+    Resume execution from a specific checkpoint.
+    
+    Args:
+        thread_id: The thread ID to resume.
+        checkpoint_id: Optional specific checkpoint ID (if None, uses latest).
+        checkpoint_type: Type of checkpointer.
+        connection_string: Optional connection string.
+        project_name: Optional LangSmith project name.
+    
+    Returns:
+        GraphState at the checkpoint, or None if not found.
+    """
+    print("\n" + "=" * 60)
+    print(f"🔄 RESUMING FROM CHECKPOINT")
+    print(f"Thread: {thread_id[:8]}...")
+    if checkpoint_id:
+        print(f"Checkpoint: {checkpoint_id[:8]}...")
+    print("=" * 60)
+    
+    try:
+        checkpoint_manager = CheckpointManager(
+            checkpointer_type=checkpoint_type,
+            connection_string=connection_string
+        )
+        
+        # Get state at checkpoint
+        state = checkpoint_manager.get_state(thread_id, checkpoint_id)
+        
+        if not state:
+            print("❌ No state found at checkpoint.")
+            return None
+        
+        print("✅ State retrieved successfully!")
+        
+        # Display state summary
+        if "working" in state:
+            working = state["working"]
+            print(f"\nCurrent Step: {working.get('current_step', 'N/A')}")
+            print(f"Entities: {len(working.get('entities', []))}")
+            print(f"Tables: {len(working.get('tables', []))}")
+            print(f"Is Complete: {working.get('is_complete', False)}")
+        
+        return state
+    
+    except Exception as e:
+        print(f"❌ Error resuming from checkpoint: {e}")
+        return None
+
+
 def run_builder(
     requirements: str,
-    dialect: str = "postgresql",
-    enable_critic: bool = True,
-    generate_nestjs: bool = True,
+    dialect: Optional[str] = None,
+    enable_critic: Optional[bool] = None,
+    generate_nestjs: Optional[bool] = None,
     interactive: bool = True,
     thread_id: Optional[str] = None,
-    project_name: Optional[str] = None
+    project_name: Optional[str] = None,
+    enable_checkpointing: bool = True,
+    checkpoint_type: CheckpointerType = CheckpointerType.SQLITE,
+    checkpoint_connection: Optional[str] = None
 ) -> GraphState:
     """
-    Run the RDBMS builder pipeline.
+    Run the RDBMS builder pipeline with long-term memory checkpointing.
     
     Args:
         requirements: User requirements for the database schema.
-        dialect: SQL dialect (postgresql, mysql, sqlite).
-        enable_critic: Whether to enable the critic node for schema review.
-        generate_nestjs: Whether to generate NestJS backend architecture.
-        interactive: Whether to prompt for user input during clarification.
+        dialect: SQL dialect (postgresql, mysql, sqlite). If None and interactive, prompts user.
+        enable_critic: Whether to enable the critic node for schema review. If None and interactive, prompts user.
+        generate_nestjs: Whether to generate NestJS backend architecture. If None and interactive, prompts user.
+        interactive: Whether to prompt for user input during clarification and configuration.
         thread_id: Optional thread ID for LangSmith conversation tracking.
                   If not provided, a new UUID will be generated.
         project_name: Optional LangSmith project name for tracing.
+        enable_checkpointing: Whether to enable long-term memory checkpointing (default: True).
+        checkpoint_type: Type of checkpointer to use (memory, sqlite, postgres).
+        checkpoint_connection: Optional connection string for checkpointer.
     
     Returns:
         Final GraphState with all generated artifacts.
     """
     print_header()
+    
+    # Prompt for configuration if interactive and not provided
+    if interactive:
+        if dialect is None:
+            d = input("Dialect [1=PostgreSQL (default), 2=MySQL, 3=SQLite]: ").strip()
+            dialect = {"1": "postgresql", "2": "mysql", "3": "sqlite", "": "postgresql"}.get(d, "postgresql")
+        
+        if enable_critic is None:
+            c = input("Enable critic (schema review)? [Y/n]: ").strip().lower()
+            enable_critic = c != "n"
+        
+        if generate_nestjs is None:
+            n = input("Generate NestJS backend? [Y/n]: ").strip().lower()
+            generate_nestjs = n != "n"
+    
+    # Apply defaults for non-interactive mode
+    dialect = dialect or "postgresql"
+    enable_critic = enable_critic if enable_critic is not None else True
+    generate_nestjs = generate_nestjs if generate_nestjs is not None else True
+    
     print(f"📝 Dialect: {dialect.upper()}")
     print(f"🔍 Critic: {'On' if enable_critic else 'Off'}")
     print(f"🚀 NestJS: {'On' if generate_nestjs else 'Off'}")
+    print(f"💾 Checkpointing: {'On' if enable_checkpointing else 'Off'} ({checkpoint_type.value if enable_checkpointing else 'N/A'})")
     
     # Initialize thread tracking
     thread_id = get_or_create_thread_id(thread_id)
@@ -407,57 +541,236 @@ def run_builder(
         requirements, dialect, enable_critic, generate_nestjs, thread_id
     )
     
-    # Create LangSmith config with thread metadata
-    config = create_thread_config(
-        thread_id=thread_id,
-        project_name=project_name,
-        run_name="RDBMS Builder - Initial",
-        tags=["rdbms-builder", dialect]
-    )
+    # Initialize checkpointing if enabled
+    checkpoint_manager = None
+    checkpointer = None
     
-    # Invoke graph with thread tracking
-    state = graph.invoke(state, config=config)
-    
-    # Handle clarification
-    if state["working"].get("needs_clarification"):
-        questions = state["archive"].get("clarifying_questions", [])
-        if questions:
-            print_questions(questions)
+    if enable_checkpointing:
+        try:
+            checkpoint_manager = CheckpointManager(
+                checkpointer_type=checkpoint_type,
+                connection_string=checkpoint_connection
+            )
             
-            if interactive:
-                answers = get_user_answers(questions)
-                if answers:
-                    StateManager.add_user_answers(state, answers)
-                state["working"]["needs_clarification"] = False
+            # Create checkpointer directly (not using context manager for main execution)
+            checkpointer = checkpoint_manager.create_checkpointer()
+            print(f"✅ Checkpointing enabled: {checkpoint_type.value}")
+            print(f"✅ Checkpointer type: {type(checkpointer).__name__}")
+            
+            # Check if we can resume from existing checkpoint
+            try:
+                temp_config = CheckpointManager.create_thread_config(thread_id)
+                existing_tuple = checkpointer.get_tuple(temp_config)
+                if existing_tuple and existing_tuple.checkpoint:
+                    existing_state = existing_tuple.checkpoint.get("channel_values")
+                    if existing_state:
+                        print(f"📂 Found existing checkpoint for thread {thread_id[:8]}...")
+                        
+                        # Show preview of existing state
+                        if "working" in existing_state:
+                            working = existing_state["working"]
+                            print(f"   Previous state:")
+                            print(f"   • Current step: {working.get('current_step', 'N/A')}")
+                            print(f"   • Entities: {len(working.get('entities', []))}")
+                            print(f"   • Tables: {len(working.get('tables', []))}")
+                            print(f"   • Complete: {working.get('is_complete', False)}")
+                        
+                        # If called interactively (not from continuation), ask to resume
+                        if interactive:
+                            resume = input("   Resume from this checkpoint? [Y/n]: ").strip().lower()
+                            if resume != "n":
+                                state = existing_state
+                                print("   ✅ Resumed from checkpoint")
+                                print("   💡 Continuing with additional requirements...")
+                        else:
+                            # Auto-resume if not interactive
+                            state = existing_state
+                            print("   ✅ Auto-resumed from checkpoint")
+            except Exception as e:
+                # Ignore errors in checkpoint resume check (checkpoint might not exist yet)
+                pass
                 
-                # Continue with same thread
-                continue_config = create_thread_config(
-                    thread_id=thread_id,
-                    project_name=project_name,
-                    run_name="RDBMS Builder - Continue",
-                    tags=["rdbms-builder", dialect, "continuation"]
-                )
-                state = graph_continue.invoke(state, config=continue_config)
-            else:
-                state["working"]["needs_clarification"] = False
-                continue_config = create_thread_config(
-                    thread_id=thread_id,
-                    project_name=project_name,
-                    run_name="RDBMS Builder - Continue (Auto)",
-                    tags=["rdbms-builder", dialect, "continuation"]
-                )
-                state = graph_continue.invoke(state, config=continue_config)
+        except ImportError as e:
+            print(f"⚠️  Checkpointing disabled: {e}")
+            checkpointer = None
+        except Exception as e:
+            print(f"⚠️  Checkpointing error: {e}")
+            import traceback
+            traceback.print_exc()
+            checkpointer = None
+    else:
+        checkpointer = None
     
-    print_task_summary(state)
-    print_critic_summary(state)
+    try:
+        # Get compiled graphs with checkpointing support
+        if checkpointer:
+            graph_main, graph_cont = get_compiled_graphs(checkpointer)
+        else:
+            graph_main, graph_cont = graph, graph_continue
+        
+        # Create LangSmith config with thread metadata
+        config = create_thread_config(
+            thread_id=thread_id,
+            project_name=project_name,
+            run_name="RDBMS Builder - Initial",
+            tags=["rdbms-builder", dialect]
+        )
+        
+        # Add checkpoint config for thread-based persistence
+        if checkpointer:
+            checkpoint_config = CheckpointManager.create_thread_config(thread_id)
+            config.update(checkpoint_config)
+        
+        # Invoke graph with thread tracking and checkpointing
+        state = graph_main.invoke(state, config=config)
+        
+        # Handle clarification
+        if state["working"].get("needs_clarification"):
+            questions = state["archive"].get("clarifying_questions", [])
+            if questions:
+                print_questions(questions)
+                
+                if interactive:
+                    answers = get_user_answers(questions)
+                    if answers:
+                        StateManager.add_user_answers(state, answers)
+                    state["working"]["needs_clarification"] = False
+                    
+                    # Continue with same thread
+                    continue_config = create_thread_config(
+                        thread_id=thread_id,
+                        project_name=project_name,
+                        run_name="RDBMS Builder - Continue",
+                        tags=["rdbms-builder", dialect, "continuation"]
+                    )
+                    
+                    if checkpointer:
+                        checkpoint_config = CheckpointManager.create_thread_config(thread_id)
+                        continue_config.update(checkpoint_config)
+                    
+                    state = graph_cont.invoke(state, config=continue_config)
+                else:
+                    state["working"]["needs_clarification"] = False
+                    continue_config = create_thread_config(
+                        thread_id=thread_id,
+                        project_name=project_name,
+                        run_name="RDBMS Builder - Continue (Auto)",
+                        tags=["rdbms-builder", dialect, "continuation"]
+                    )
+                    
+                    if checkpointer:
+                        checkpoint_config = CheckpointManager.create_thread_config(thread_id)
+                        continue_config.update(checkpoint_config)
+                    
+                    state = graph_cont.invoke(state, config=continue_config)
+        
+        print_task_summary(state)
+        print_critic_summary(state)
+        
+        print("\n" + "=" * 60)
+        print("🎉 COMPLETE!")
+        print(f"📊 LLM Calls: {state['archive']['total_llm_calls']}")
+        print(f"🧵 Thread ID: {thread_id}")
+        
+        if checkpointer and checkpoint_manager:
+            checkpoints = checkpoint_manager.list_checkpoints(thread_id, limit=5)
+            print(f"💾 Checkpoints Saved: {len(checkpoints)}")
+        
+        print("=" * 60)
+        
+        return state
+    
+    finally:
+        # Cleanup checkpointer resources if needed
+        if checkpoint_manager:
+            checkpoint_manager._cleanup()
+
+
+def list_previous_threads(
+    checkpoint_type: CheckpointerType = CheckpointerType.SQLITE,
+    connection_string: Optional[str] = None
+) -> list:
+    """
+    List all previous conversation threads.
+    
+    Returns:
+        List of (thread_id, checkpoint_count, latest_step) tuples
+    """
+    import sqlite3
+    
+    if checkpoint_type != CheckpointerType.SQLITE:
+        print("⚠️  Thread listing only supported for SQLite currently")
+        return []
+    
+    db_path = connection_string or "./data/checkpoints.db"
+    
+    if not os.path.exists(db_path):
+        return []
+    
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                thread_id,
+                COUNT(*) as checkpoint_count,
+                MAX(json_extract(metadata, '$.step')) as latest_step
+            FROM checkpoints
+            GROUP BY thread_id
+            ORDER BY MAX(rowid) DESC
+        """)
+        
+        threads = cursor.fetchall()
+        conn.close()
+        
+        return threads
+    except Exception as e:
+        print(f"⚠️  Error listing threads: {e}")
+        return []
+
+
+def select_previous_thread(
+    checkpoint_type: CheckpointerType = CheckpointerType.SQLITE,
+    connection_string: Optional[str] = None
+) -> Optional[str]:
+    """
+    Allow user to select a previous thread to continue.
+    
+    Returns:
+        Selected thread_id or None
+    """
+    threads = list_previous_threads(checkpoint_type, connection_string)
+    
+    if not threads:
+        print("\n📝 No previous conversations found.")
+        return None
     
     print("\n" + "=" * 60)
-    print("🎉 COMPLETE!")
-    print(f"📊 LLM Calls: {state['archive']['total_llm_calls']}")
-    print(f"🧵 Thread ID: {thread_id}")
+    print("📚 PREVIOUS CONVERSATIONS")
     print("=" * 60)
     
-    return state
+    for i, (thread_id, count, step) in enumerate(threads[:10], 1):  # Show last 10
+        print(f"\n{i}. Thread: {thread_id[:16]}...")
+        print(f"   Checkpoints: {count} | Latest Step: {step or 'N/A'}")
+    
+    print("\n" + "=" * 60)
+    
+    choice = input("\nSelect thread number (or press Enter to start new): ").strip()
+    
+    if not choice:
+        return None
+    
+    try:
+        idx = int(choice) - 1
+        if 0 <= idx < len(threads):
+            return threads[idx][0]
+        else:
+            print("❌ Invalid selection")
+            return None
+    except ValueError:
+        print("❌ Invalid input")
+        return None
 
 
 def main():
@@ -475,7 +788,37 @@ def main():
     print("\n🔧 Configuration")
     print("-" * 40)
     
-    d = input("Dialect [1=PostgreSQL, 2=MySQL, 3=SQLite]: ").strip()
+    # Checkpointing configuration first (to check for previous threads)
+    cp = input("Enable checkpointing (long-term memory)? [Y/n]: ").strip().lower()
+    enable_checkpointing = cp != "n"
+    
+    checkpoint_type = CheckpointerType.SQLITE
+    checkpoint_connection = None
+    resume_thread_id = None
+    
+    if enable_checkpointing:
+        cpt = input("Checkpoint type [1=SQLite (default), 2=PostgreSQL, 3=Memory]: ").strip()
+        if cpt == "2":
+            checkpoint_type = CheckpointerType.POSTGRES
+            checkpoint_connection = input("PostgreSQL URI [default: env var]: ").strip() or None
+        elif cpt == "3":
+            checkpoint_type = CheckpointerType.MEMORY
+        else:
+            checkpoint_type = CheckpointerType.SQLITE
+            checkpoint_connection = input("SQLite DB path [default: ./data/checkpoints.db]: ").strip() or None
+        
+        # Ask if user wants to resume a previous conversation
+        resume = input("\nContinue a previous conversation? [y/N]: ").strip().lower()
+        if resume == "y":
+            resume_thread_id = select_previous_thread(checkpoint_type, checkpoint_connection)
+            if resume_thread_id:
+                print(f"\n✅ Will continue thread: {resume_thread_id[:16]}...")
+                # User can provide additional requirements
+                additional = input("\nAdditional requirements (or press Enter to continue): ").strip()
+                if additional:
+                    requirements = additional
+    
+    d = input("\nDialect [1=PostgreSQL, 2=MySQL, 3=SQLite]: ").strip()
     dialect = {"1": "postgresql", "2": "mysql", "3": "sqlite", "": "postgresql"}.get(d, "postgresql")
     
     c = input("Enable critic? [Y/n]: ").strip().lower()
@@ -484,7 +827,16 @@ def main():
     n = input("Generate NestJS backend? [Y/n]: ").strip().lower()
     generate_nestjs = n != "n"
     
-    result = run_builder(requirements, dialect, enable_critic, generate_nestjs)
+    result = run_builder(
+        requirements,
+        dialect,
+        enable_critic,
+        generate_nestjs,
+        enable_checkpointing=enable_checkpointing,
+        checkpoint_type=checkpoint_type,
+        checkpoint_connection=checkpoint_connection,
+        thread_id=resume_thread_id  # Pass the resumed thread_id
+    )
     
     # Show DDL
     print("\n" + "=" * 60)
