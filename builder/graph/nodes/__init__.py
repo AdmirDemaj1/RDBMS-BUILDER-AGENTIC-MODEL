@@ -11,6 +11,7 @@ from .refinement_validator import verify_refinements, verify_initial_schema
 from .sql_generator import sql_generator
 from .erd_generator import erd_generator
 from .nestjs_generator import nestjs_generator
+from .response_formatter import response_formatter
 
 __all__ = [
     "planner",
@@ -25,5 +26,6 @@ __all__ = [
     "verify_initial_schema",
     "sql_generator",
     "erd_generator",
-    "nestjs_generator"
+    "nestjs_generator",
+    "response_formatter"
 ]

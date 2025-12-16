@@ -72,7 +72,7 @@ def clarifier(state: GraphState) -> GraphState:
             
     except Exception as e:
         fail_task(state, "clarify", str(e))
-        state["working"]["needs_clarification"] = False
-        state["working"]["current_step"] = "clarification_complete"
+        # Re-raise to let LangGraph checkpoint at previous node for proper resume
+        raise
     
     return state

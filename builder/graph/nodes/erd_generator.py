@@ -137,8 +137,8 @@ def erd_generator(state: GraphState) -> GraphState:
     
     if not tables:
         fail_task(state, "generate_erd", "No tables")
-        state["working"]["is_complete"] = True
-        return state
+        # Don't set is_complete here - let the final node handle it
+        raise ValueError("No tables available to generate ERD")
     
     try:
         # Generate ERD diagram
@@ -169,8 +169,8 @@ def erd_generator(state: GraphState) -> GraphState:
         
         state["archive"]["erd_diagram"] = full_output
         state["archive"]["completed_at"] = datetime.now().isoformat()
-        state["working"]["is_complete"] = True
-        state["working"]["current_step"] = "complete"
+        # Don't set is_complete here - format_response is the final node
+        state["working"]["current_step"] = "erd_generation_complete"
         
         # Count stats for completion message
         total_indexes = sum(len(t.get("indexes", [])) for t in tables)
@@ -184,6 +184,7 @@ def erd_generator(state: GraphState) -> GraphState:
         
     except Exception as e:
         fail_task(state, "generate_erd", str(e))
-        state["working"]["is_complete"] = True
+        # Re-raise to let LangGraph checkpoint at previous node for proper resume
+        raise
     
     return state

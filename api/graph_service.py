@@ -94,7 +94,8 @@ class GraphService:
             erd_diagram=archive.get("erd_diagram"),
             nestjs_architecture=archive.get("nestjs_architecture"),
             total_llm_calls=archive.get("total_llm_calls", 0),
-            versions=archive.get("schema_versions")
+            versions=archive.get("schema_versions"),
+            formatted=archive.get("formatted_response")
         )
         
         metadata = MetadataInfo(
@@ -399,6 +400,7 @@ class GraphService:
     ) -> Tuple[GraphResult, Optional[List[Dict[str, Any]]], Optional[Dict[str, Any]]]:
         """
         Resume a previous conversation by thread ID.
+        Uses LangGraph's native checkpoint resumption.
         
         Returns:
             Tuple of (result, clarifying_questions, state)
@@ -407,9 +409,9 @@ class GraphService:
         """
         try:
             checkpointer = self._get_checkpointer()
-            
-            # Get existing state
             config = CheckpointManager.create_thread_config(thread_id)
+            
+            # Get existing checkpoint to check current state
             existing_tuple = checkpointer.get_tuple(config)
             
             if not existing_tuple or not existing_tuple.checkpoint:
@@ -435,7 +437,12 @@ class GraphService:
                     None
                 )
             
-            # Check if current state already needs clarification
+            # Check if graph already completed
+            if state["working"].get("is_complete"):
+                if not additional_requirements:
+                    return (self._state_to_result(state, thread_id, "build_only"), None, state)
+            
+            # Check if needs clarification - return questions for user to answer
             if state["working"].get("needs_clarification"):
                 questions = state["archive"].get("clarifying_questions", [])
                 return (
@@ -453,40 +460,64 @@ class GraphService:
                     state
                 )
             
-            # If additional requirements, update and re-run
-            if additional_requirements:
-                state["working"]["user_requirements"] = additional_requirements
-                
-                # Get compiled graphs
-                graph_main, _ = get_compiled_graphs(checkpointer)
-                
-                # Create config
-                run_config = create_thread_config(
-                    thread_id=thread_id,
-                    run_name="API - Resume Conversation"
+            # Get graph with checkpointer
+            graph_main, _ = get_compiled_graphs(checkpointer)
+            
+            # Use LangGraph time-travel: get state history and find the right checkpoint
+            # The checkpoint_id tells LangGraph exactly where to resume from
+            states = list(graph_main.get_state_history(config))
+            
+            if not states:
+                return (
+                    GraphResult(
+                        success=False,
+                        thread_id=thread_id,
+                        error="No state history found for this thread"
+                    ),
+                    None,
+                    None
                 )
-                run_config.update(config)
-                
-                # Run
-                state = graph_main.invoke(state, config=run_config)
-                
-                # Check if clarification needed after run
-                if state["working"].get("needs_clarification"):
-                    questions = state["archive"].get("clarifying_questions", [])
-                    return (
-                        GraphResult(
-                            success=True,
-                            thread_id=thread_id,
+            
+            # Find the most recent checkpoint that has a next step (not completed)
+            # States are returned in reverse chronological order
+            resume_config = None
+            for hist_state in states:
+                if hist_state.next:  # Has next steps to execute
+                    resume_config = hist_state.config
+                    print(f"Resume: Found checkpoint at {hist_state.next}, checkpoint_id={resume_config['configurable'].get('checkpoint_id')}")
+                    break
+            
+            if not resume_config:
+                # Graph completed, return current results
+                print("Resume: Graph already completed, returning results")
+                return (self._state_to_result(state, thread_id, "build_only"), None, state)
+            
+            # Optional: Update state if additional requirements provided
+            if additional_requirements:
+                state["working"]["user_requirements"] += f"\n\nAdditional: {additional_requirements}"
+                resume_config = graph_main.update_state(resume_config, values=state)
+            
+            # Resume execution from the checkpoint using time-travel
+            # Pass None as input and the config with checkpoint_id
+            state = graph_main.invoke(None, resume_config)
+            
+            # Check if clarification needed after run
+            if state and state["working"].get("needs_clarification"):
+                questions = state["archive"].get("clarifying_questions", [])
+                return (
+                    GraphResult(
+                        success=True,
+                        thread_id=thread_id,
+                        mode="build_only",
+                        metadata=MetadataInfo(
                             mode="build_only",
-                            metadata=MetadataInfo(
-                                mode="build_only",
-                                iteration_count=state["working"].get("iteration_count", 0),
-                                is_complete=False
-                            )
-                        ),
-                        questions,
-                        state
-                    )
+                            iteration_count=state["working"].get("iteration_count", 0),
+                            is_complete=False
+                        )
+                    ),
+                    questions,
+                    state
+                )
             
             return (self._state_to_result(state, thread_id, "build_only"), None, state)
             
@@ -510,6 +541,7 @@ class GraphService:
     ) -> None:
         """
         Resume a conversation asynchronously.
+        Uses LangGraph's native checkpoint resumption.
         """
         try:
             await job_manager.update_job(
@@ -520,9 +552,9 @@ class GraphService:
             )
             
             checkpointer = self._get_checkpointer()
-            
-            # Get existing state
             config = CheckpointManager.create_thread_config(job.thread_id)
+            
+            # Get existing checkpoint
             existing_tuple = checkpointer.get_tuple(config)
             
             if not existing_tuple or not existing_tuple.checkpoint:
@@ -545,10 +577,23 @@ class GraphService:
             await job_manager.update_job(
                 job.job_id,
                 progress=10,
-                current_step="processing"
+                current_step="checking_state"
             )
             
-            # Check if current state already needs clarification
+            # Check if already completed
+            if state["working"].get("is_complete") and not additional_requirements:
+                result = self._state_to_result(state, job.thread_id, "build_only")
+                await job_manager.update_job(
+                    job.job_id,
+                    status=JobStatus.COMPLETED,
+                    progress=100,
+                    current_step="complete",
+                    result=result.model_dump(),
+                    state=state
+                )
+                return
+            
+            # Check if needs clarification
             if state["working"].get("needs_clarification"):
                 questions = state["archive"].get("clarifying_questions", [])
                 clarifying_questions = [
@@ -569,51 +614,84 @@ class GraphService:
                 )
                 return
             
-            # If additional requirements, update and re-run
-            if additional_requirements:
-                state["working"]["user_requirements"] = additional_requirements
-                
-                # Get compiled graphs
-                graph_main, _ = get_compiled_graphs(checkpointer)
-                
-                # Create config
-                run_config = create_thread_config(
-                    thread_id=job.thread_id,
-                    run_name="API - Resume Conversation Async"
-                )
-                run_config.update(config)
-                
+            # Get graph with checkpointer
+            graph_main, _ = get_compiled_graphs(checkpointer)
+            
+            await job_manager.update_job(
+                job.job_id,
+                progress=20,
+                current_step="finding_checkpoint"
+            )
+            
+            # Use LangGraph time-travel: get state history and find the right checkpoint
+            states = list(graph_main.get_state_history(config))
+            
+            if not states:
                 await job_manager.update_job(
                     job.job_id,
-                    progress=20,
-                    current_step="running_graph"
+                    status=JobStatus.FAILED,
+                    error="No state history found for this thread"
                 )
-                
-                # Run in executor
-                state = await job_manager.run_in_executor(
-                    graph_main.invoke, state, run_config
+                return
+            
+            # Find the most recent checkpoint that has a next step (not completed)
+            resume_config = None
+            for hist_state in states:
+                if hist_state.next:  # Has next steps to execute
+                    resume_config = hist_state.config
+                    print(f"Resume async: Found checkpoint at {hist_state.next}, checkpoint_id={resume_config['configurable'].get('checkpoint_id')}")
+                    break
+            
+            if not resume_config:
+                # Graph already completed, return results
+                print("Resume async: Graph already completed, returning results")
+                result = self._state_to_result(state, job.thread_id, "build_only")
+                await job_manager.update_job(
+                    job.job_id,
+                    status=JobStatus.COMPLETED,
+                    progress=100,
+                    current_step="complete",
+                    result=result.model_dump(),
+                    state=state
                 )
-                
-                # Check if clarification needed after run
-                if state["working"].get("needs_clarification"):
-                    questions = state["archive"].get("clarifying_questions", [])
-                    clarifying_questions = [
-                        {
-                            "question": q.get("question", ""),
-                            "context": q.get("context"),
-                            "options": q.get("options")
-                        }
-                        for q in questions
-                    ]
-                    await job_manager.update_job(
-                        job.job_id,
-                        status=JobStatus.AWAITING_INPUT,
-                        progress=15,
-                        current_step="awaiting_clarification",
-                        clarifying_questions=clarifying_questions,
-                        state=state
-                    )
-                    return
+                return
+            
+            # Optional: Update state if additional requirements provided
+            if additional_requirements:
+                state["working"]["user_requirements"] += f"\n\nAdditional: {additional_requirements}"
+                resume_config = graph_main.update_state(resume_config, values=state)
+            
+            await job_manager.update_job(
+                job.job_id,
+                progress=25,
+                current_step="resuming_from_checkpoint"
+            )
+            
+            # Resume execution from the checkpoint using time-travel
+            state = await job_manager.run_in_executor(
+                graph_main.invoke, None, resume_config
+            )
+            
+            # Check if clarification needed
+            if state and state["working"].get("needs_clarification"):
+                questions = state["archive"].get("clarifying_questions", [])
+                clarifying_questions = [
+                    {
+                        "question": q.get("question", ""),
+                        "context": q.get("context"),
+                        "options": q.get("options")
+                    }
+                    for q in questions
+                ]
+                await job_manager.update_job(
+                    job.job_id,
+                    status=JobStatus.AWAITING_INPUT,
+                    progress=15,
+                    current_step="awaiting_clarification",
+                    clarifying_questions=clarifying_questions,
+                    state=state
+                )
+                return
             
             # Complete
             result = self._state_to_result(state, job.thread_id, "build_only")

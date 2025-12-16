@@ -159,7 +159,7 @@ def schema_designer(state: GraphState) -> GraphState:
             print(f"   ⚠️  Schema design error: {error_msg[:200]}")
         
         fail_task(state, "design_schema", error_msg)
-        state["working"]["tables"] = []
-        state["working"]["current_step"] = "error"
+        # Re-raise to let LangGraph checkpoint at previous node for proper resume
+        raise
     
     return state

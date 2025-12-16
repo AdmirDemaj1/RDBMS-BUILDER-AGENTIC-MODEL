@@ -11,6 +11,7 @@ from api.models import (
     GenerateRequest,
     ResumeRequest,
     AnswerQuestionsRequest,
+    ChatRequest,
     GraphResult,
     AsyncJobResponse,
     JobStatusResponse,
@@ -19,7 +20,8 @@ from api.models import (
     ErrorResponse,
     ClarifyingQuestion,
     JobStatus,
-    ResumeResponse
+    ResumeResponse,
+    ChatResponse
 )
 from api.job_manager import JobManager, JobStatus as JobStatusEnum, _jobs_storage
 from api.graph_service import get_graph_service, GraphService
@@ -480,4 +482,185 @@ async def debug_list_jobs():
         "total_jobs": len(_jobs_storage),
         "jobs": jobs_info
     }
+
+
+# ============================================================
+# CHAT - AUTO-ROUTING ENDPOINT (uses parent graph)
+# ============================================================
+
+@router.post(
+    "/chat",
+    response_model=ChatResponse,
+    summary="Chat with auto-routing",
+    description="Auto-routes between build and explain based on user intent. Use this for interactive conversations."
+)
+async def chat(
+    request: ChatRequest,
+    background_tasks: BackgroundTasks
+):
+    """
+    Chat endpoint with automatic intent routing.
+    
+    The parent graph analyzes your message and decides:
+    - **build**: Creates a new backend or modifies existing one
+    - **explain**: Answers questions about the generated backend
+    
+    For explain mode, you MUST provide a thread_id of an existing conversation
+    that has a generated backend.
+    
+    Examples:
+    - "Build me a hotel management system" → build mode
+    - "What tables were created?" → explain mode (requires thread_id)
+    - "Explain the relationships in the schema" → explain mode
+    """
+    from parent_graph.builder import classify_intent
+    from explainer.run_explainer import run_explainer
+    import uuid
+    
+    job_manager = get_job_manager()
+    service = get_graph_service()
+    
+    # Use parent graph's intent classifier
+    has_backend = False
+    backend_context = None
+    
+    # If thread_id provided, check if backend exists
+    if request.thread_id:
+        result, _, state = service.resume_conversation(thread_id=request.thread_id)
+        if result.success and state:
+            archive = state.get("archive", {})
+            if archive.get("ddl_script") or archive.get("nestjs_architecture"):
+                has_backend = True
+                backend_context = {
+                    "ddl_script": archive.get("ddl_script"),
+                    "erd_diagram": archive.get("erd_diagram"),
+                    "nestjs_architecture": archive.get("nestjs_architecture"),
+                    "working": state.get("working", {})
+                }
+    
+    # Classify intent using parent graph's LLM classifier
+    classification = classify_intent(request.message, has_backend=has_backend)
+    
+    thread_id = request.thread_id or str(uuid.uuid4())
+    
+    logger.info(f"Chat intent: {classification.intent} - {classification.reasoning}")
+    
+    # Route based on intent
+    if classification.intent == "explain":
+        if not has_backend:
+            return ChatResponse(
+                success=False,
+                thread_id=thread_id,
+                intent="explain",
+                intent_reasoning=classification.reasoning,
+                status="error",
+                message="No backend found. Please provide a thread_id of an existing conversation with a generated backend, or build one first."
+            )
+        
+        # Run explainer synchronously (it's usually fast)
+        explanation = run_explainer(
+            user_question=request.message,
+            backend_context=backend_context,
+            interactive=False
+        )
+        
+        return ChatResponse(
+            success=True,
+            thread_id=thread_id,
+            intent="explain",
+            intent_reasoning=classification.reasoning,
+            explanation=explanation,
+            status="completed",
+            message="Question answered based on the generated backend."
+        )
+    
+    else:  # build intent
+        # Start async build job
+        job = await job_manager.create_job(
+            requirements=request.message,
+            dialect=request.dialect or "postgresql",
+            enable_critic=request.enable_critic if request.enable_critic is not None else True,
+            generate_nestjs=request.generate_nestjs if request.generate_nestjs is not None else True,
+            thread_id=thread_id,
+            enable_memory=True
+        )
+        
+        # Start background execution
+        background_tasks.add_task(service.run_async, job, job_manager)
+        
+        return ChatResponse(
+            success=True,
+            thread_id=thread_id,
+            intent="build",
+            intent_reasoning=classification.reasoning,
+            job_id=job.job_id,
+            status="processing",
+            message=f"Build started. Poll /job/{job.job_id} for status."
+        )
+
+
+@router.post(
+    "/explain",
+    response_model=ChatResponse,
+    summary="Ask questions about generated backend",
+    description="Directly query the explainer about an existing backend. Requires thread_id."
+)
+async def explain_backend(
+    request: ChatRequest
+):
+    """
+    Direct endpoint for asking questions about a generated backend.
+    
+    Unlike /chat, this always uses explain mode without intent classification.
+    Requires a thread_id of a conversation that has generated a backend.
+    """
+    from explainer.run_explainer import run_explainer
+    import uuid
+    
+    service = get_graph_service()
+    
+    if not request.thread_id:
+        raise HTTPException(
+            status_code=400,
+            detail="thread_id is required for explain endpoint. Use the thread_id from a previous build."
+        )
+    
+    # Load backend context
+    result, _, state = service.resume_conversation(thread_id=request.thread_id)
+    
+    if not result.success:
+        raise HTTPException(status_code=404, detail=f"Conversation not found: {result.error}")
+    
+    if not state:
+        raise HTTPException(status_code=404, detail="No state found for this conversation")
+    
+    archive = state.get("archive", {})
+    if not archive.get("ddl_script") and not archive.get("nestjs_architecture"):
+        raise HTTPException(
+            status_code=400,
+            detail="No backend has been generated for this conversation yet. Run a build first."
+        )
+    
+    backend_context = {
+        "ddl_script": archive.get("ddl_script"),
+        "erd_diagram": archive.get("erd_diagram"),
+        "nestjs_architecture": archive.get("nestjs_architecture"),
+        "working": state.get("working", {})
+    }
+    
+    # Run explainer
+    explanation = run_explainer(
+        user_question=request.message,
+        backend_context=backend_context,
+        interactive=False
+    )
+    
+    return ChatResponse(
+        success=True,
+        thread_id=request.thread_id,
+        intent="explain",
+        explanation=explanation,
+        status="completed",
+        message="Question answered."
+    )
 

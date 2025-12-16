@@ -87,7 +87,7 @@ def relationship_analyzer(state: GraphState) -> GraphState:
         
     except Exception as e:
         fail_task(state, "analyze_relationships", str(e))
-        state["working"]["relationships"] = []
-        state["working"]["current_step"] = "error"
+        # Re-raise to let LangGraph checkpoint at previous node for proper resume
+        raise
     
     return state

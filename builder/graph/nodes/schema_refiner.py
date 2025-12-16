@@ -207,6 +207,7 @@ def schema_refiner(state: GraphState) -> GraphState:
             error_msg += "Check that all columns have 'name' and 'data_type' fields."
         
         fail_task(state, "refine_schema", error_msg)
-        state["working"]["current_step"] = "refine_failed"
+        # Re-raise to let LangGraph checkpoint at previous node for proper resume
+        raise
     
     return state

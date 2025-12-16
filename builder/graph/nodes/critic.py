@@ -142,6 +142,7 @@ def critic(state: GraphState) -> GraphState:
         
     except Exception as e:
         fail_task(state, "critic", str(e))
-        state["working"]["current_step"] = "critic_failed"
+        # Re-raise to let LangGraph checkpoint at previous node for proper resume
+        raise
     
     return state

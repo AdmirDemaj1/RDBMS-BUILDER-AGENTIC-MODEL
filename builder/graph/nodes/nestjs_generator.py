@@ -307,6 +307,7 @@ Keep it brief and actionable.""")
         
     except Exception as e:
         fail_task(state, "generate_nestjs", str(e))
-        state["working"]["current_step"] = "error"
+        # Re-raise to let LangGraph checkpoint at previous node for proper resume
+        raise
     
     return state

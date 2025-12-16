@@ -93,17 +93,8 @@ Classify the intent and provide guidance."""
     except Exception as e:
         from utils.task_manager import fail_task
         fail_task(state, task_id, str(e))
-        return {
-            "working": {
-                "error": f"Intent classification failed: {str(e)}",
-                "intent_classification": {
-                    "is_relevant": False,
-                    "intent_type": "unrelated",
-                    "reasoning": "Error during classification",
-                    "suggested_action": "Ask user to rephrase"
-                }
-            }
-        }
+        # Re-raise to let LangGraph checkpoint at previous node for proper resume
+        raise
 
 
 def should_proceed_with_generation(state: GraphState) -> str:

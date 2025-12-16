@@ -66,7 +66,7 @@ def entity_extractor(state: GraphState) -> GraphState:
         
     except Exception as e:
         fail_task(state, "extract_entities", str(e))
-        state["working"]["entities"] = []
-        state["working"]["current_step"] = "error"
+        # Re-raise to let LangGraph checkpoint at previous node for proper resume
+        raise
     
     return state

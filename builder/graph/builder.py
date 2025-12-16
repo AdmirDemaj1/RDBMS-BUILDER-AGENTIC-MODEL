@@ -16,7 +16,8 @@ from .nodes import (
     verify_refinements,
     sql_generator,
     erd_generator,
-    nestjs_generator
+    nestjs_generator,
+    response_formatter
 )
 
 
@@ -102,6 +103,7 @@ def build_graph(checkpointer: Optional[BaseCheckpointSaver] = None) -> StateGrap
     workflow.add_node("generate_erd", erd_generator)
     workflow.add_node("generate_nestjs", nestjs_generator)
     workflow.add_node("aggregator", aggregator)
+    workflow.add_node("format_response", response_formatter)  # Format output for frontend
     
     # Set entry point
     workflow.set_entry_point("plan")
@@ -148,8 +150,9 @@ def build_graph(checkpointer: Optional[BaseCheckpointSaver] = None) -> StateGrap
     workflow.add_edge("generate_erd", "aggregator")
     workflow.add_edge("generate_nestjs", "aggregator")
     
-    # Aggregator completes the workflow
-    workflow.add_edge("aggregator", END)
+    # Format response for frontend before completing
+    workflow.add_edge("aggregator", "format_response")
+    workflow.add_edge("format_response", END)
     
     # Compile with optional checkpointing for long-term memory
     return workflow.compile(checkpointer=checkpointer)
@@ -183,6 +186,7 @@ def build_graph_continue(checkpointer: Optional[BaseCheckpointSaver] = None) -> 
     workflow.add_node("generate_erd", erd_generator)
     workflow.add_node("generate_nestjs", nestjs_generator)
     workflow.add_node("aggregator", aggregator)
+    workflow.add_node("format_response", response_formatter)  # Format output for frontend
     
     # Set entry point
     workflow.set_entry_point("extract_entities")
@@ -222,7 +226,9 @@ def build_graph_continue(checkpointer: Optional[BaseCheckpointSaver] = None) -> 
     workflow.add_edge("generate_erd", "aggregator")
     workflow.add_edge("generate_nestjs", "aggregator")
     
-    workflow.add_edge("aggregator", END)
+    # Format response for frontend before completing
+    workflow.add_edge("aggregator", "format_response")
+    workflow.add_edge("format_response", END)
     
     # Compile with optional checkpointing for long-term memory
     return workflow.compile(checkpointer=checkpointer)

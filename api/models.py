@@ -78,6 +78,21 @@ class AnswerQuestionsRequest(BaseModel):
     )
 
 
+class ChatRequest(BaseModel):
+    """Request body for /api/v1/chat - auto-routes between build and explain"""
+    message: str = Field(..., description="User message - can be a build request or a question")
+    thread_id: Optional[str] = Field(
+        default=None,
+        description="Thread ID for conversation continuity (required for explain mode)"
+    )
+    dialect: Optional[str] = Field(
+        default="postgresql",
+        description="SQL dialect for build mode"
+    )
+    enable_critic: Optional[bool] = Field(default=True)
+    generate_nestjs: Optional[bool] = Field(default=True)
+
+
 # ============================================================
 # RESPONSE MODELS
 # ============================================================
@@ -94,6 +109,10 @@ class ResultsData(BaseModel):
     versions: Optional[List[Dict[str, Any]]] = Field(
         default=None,
         description="Schema version history"
+    )
+    formatted: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Formatted response optimized for frontend display"
     )
 
 
@@ -185,5 +204,21 @@ class ResumeResponse(BaseModel):
         description="Questions requiring user input"
     )
     result: Optional[GraphResult] = Field(default=None, description="Final result when completed")
+    message: Optional[str] = Field(default=None, description="Status message")
+
+
+class ChatResponse(BaseModel):
+    """Response for /api/v1/chat - auto-routing chat endpoint"""
+    success: bool = Field(default=True)
+    thread_id: str = Field(..., description="Thread ID for this session")
+    intent: str = Field(..., description="Detected intent: 'build' or 'explain'")
+    intent_reasoning: Optional[str] = Field(default=None, description="Why this intent was chosen")
+    # For explain mode
+    explanation: Optional[str] = Field(default=None, description="Answer to user's question")
+    # For build mode  
+    job_id: Optional[str] = Field(default=None, description="Job ID for async build")
+    status: str = Field(default="completed", description="Status of the operation")
+    clarifying_questions: Optional[List[ClarifyingQuestion]] = Field(default=None)
+    result: Optional[GraphResult] = Field(default=None, description="Build result if completed")
     message: Optional[str] = Field(default=None, description="Status message")
 
